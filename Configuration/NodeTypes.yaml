@@ -1,0 +1,74 @@
+'Neos.Neos:Node': &node
+  properties:
+    '__identifier':
+      search:
+        indexing: "${node.identifier}"
+    '__workspace':
+      search:
+        indexing: "${node.context.workspace.name}"
+    '__path':
+      search:
+        indexing: "${node.path}"
+    '__parentPath':
+      search:
+        indexing: "${Indexing.buildAllPathPrefixes(node.parentPath)}"
+    '__sortIndex':
+      search:
+        indexing: "${node.index}"
+    '_removed':
+      search:
+        indexing: ''
+    '__type':
+      search:
+        indexing: "${node.nodeType.name}"
+    '__typeAndSupertypes':
+      search:
+        indexing: "${Indexing.extractNodeTypeNamesAndSupertypes(node.nodeType)}"
+    '__dimensionshash':
+      search:
+        indexing: "${String.md5(Json.stringify(node.context.dimensions))}"
+
+'unstructured': *node
+
+'Neos.Neos:Hidable':
+  properties:
+    '_hidden':
+      search:
+        indexing: "${node.hidden}"
+
+'Neos.Neos:Timable':
+  properties:
+    '_hiddenBeforeDateTime':
+      search:
+        indexing: "${(node.hiddenBeforeDateTime ? Date.format(node.hiddenBeforeDateTime, 'U') : null)}"
+    '_hiddenAfterDateTime':
+      search:
+        indexing: "${(node.hiddenAfterDateTime ? Date.format(node.hiddenAfterDateTime, 'U') : null)}"
+
+'Neos.NodeTypes:Text':
+  search:
+    fulltext:
+      enable: true
+  properties:
+    text:
+      search:
+        fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.text)}"
+
+'Neos.NodeTypes:Headline':
+  search:
+    fulltext:
+      enable: true
+  properties:
+    title:
+      search:
+        fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.title)}"
+
+'Neos.Neos:Document':
+  search:
+    fulltext:
+      isRoot: true
+      enable: true
+  properties:
+    title:
+      search:
+        fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.title)}"
