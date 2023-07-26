@@ -1,0 +1,42 @@
+prototype(Medienreaktor.Meilisearch:Component.Pagination) < prototype(Neos.Fusion:Component) {
+    searchTerm = ''
+    page = 1
+    hits = 0
+    hitsPerPage = 1
+    totalPages = 1
+    totalHits = 0
+
+    pagination = Neos.Fusion:Map {
+        items = ${Array.range(1, props.totalPages)}
+        itemName = 'page'
+        itemRenderer = Neos.Fusion:Tag {
+            tagName = 'a'
+            attributes {
+                class = ${page == props.page ? 'active' : ''}
+                href = Neos.Neos:NodeUri {
+                    node = ${documentNode}
+                    additionalParams = Neos.Fusion:RawArray {
+                        search = ${props.searchTerm}
+                        page = ${page}
+                    }
+                }
+            }
+            content = ${page}
+        }
+    }
+
+    renderer = afx`
+        <div @if={Array.length(props.pagination) > 1}>
+            <div>
+                Showing <strong>{props.hits}</strong> of <strong>{props.totalHits}</strong> results on <strong>{props.totalPages}</strong> pages.
+            </div>
+            <ol>
+                <Neos.Fusion:Loop items={props.pagination}>
+                    <li>
+                        {item}
+                    </li>
+                </Neos.Fusion:Loop>
+            </ol>
+        </div>
+    `
+}

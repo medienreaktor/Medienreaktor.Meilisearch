@@ -11,11 +11,11 @@ This package aims for simplicity and minimal dependencies. It might therefore no
 * ✅ CLI commands for building and flushing the index
 * ✅ Querying the index via Eel-Helpers as usually
 * ✅ Faceting query to get facet distribution for node properties
+* ✅ Frontend search form, result rendering and pagination
 * 🟠 Only indexing the Live-Workspace for now
 * 🟠 Documentation (this README) just covers the basics
 * 🔴 No asset indexing (yet)
-* 🔴 No autocomplete / autosuggest (yet)
-* 🔴 No frontend plugin (yet, but can be used with [Flowpack.SearchPlugin](https://github.com/Flowpack/Flowpack.SearchPlugin))
+* 🔴 No autocomplete / autosuggest (this is currently not supported by Meilisearch)
 
 ## 🚀 Installation
 
@@ -66,7 +66,7 @@ Please do not remove, only extend, above `filterableAttributes`, as they are nee
 
 After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`. 
 
-Document-NodeTypes should be configured as fulltext root (this comes by default for all `Neos.Neos:Document` subtypes):
+Document NodeTypes should be configured as fulltext root (this comes by default for all `Neos.Neos:Document` subtypes):
 
 ```yaml
 'Neos.Neos:Document':
@@ -76,7 +76,7 @@ Document-NodeTypes should be configured as fulltext root (this comes by default 
       enable: true
 ```
 
-Properties of Content-NodeTypes that should be included in fulltext search must also be configured appropriately:
+Properties of Content NodeTypes that should be included in fulltext search must also be configured appropriately:
 
 ```yaml
 'Neos.NodeTypes:Text':
@@ -91,20 +91,29 @@ Properties of Content-NodeTypes that should be included in fulltext search must 
 
 ## 📖 Usage
 
-You can use search queries, results and facets in your Fusion components as usually:
+There is a built-in Content NodeType `Medienreaktor.Meilisearch:Search` for rendering the search form, results and pagination that may serve as a boilerplate for your projects. Just place it on your search page to start.
+
+You can use search queries, results and facets in your own Fusion components as usually:
 
     prototype(Vendor:Content.Search) < prototype(Neos.Neos:ContentComponent) {
         searchTerm = ${String.toString(request.arguments.search)}
         searchQuery = ${this.searchTerm ? Search.query(site).fulltext(this.searchTerm).nodeType('Neos.Neos:Document') : null}
 
-        totalSearchResults = ${this.searchQuery.count()}
+        page = ${String.toInteger(request.arguments.page) || 1}
+        hitsPerPage = 10
+
+        paginatedSearchQuery = ${this.searchQuery.page(this.page).hitsPerPage(this.hitsPerPage)}
+
+        totalPages = ${this.paginatedSearchQuery.totalPages()}
+        totalHits = ${this.paginatedSearchQuery.totalHits()}
+
         facets = ${this.searchQuery.facets(['__type'])}
     }
 
 If you want facet distribution for certain node properties or search in them, make sure to add them to `filterableAttributes` and/or `searchableAttributes` in your `Settings.yaml`.
 
 The search query builder currently supports the following features:
-`query`, `sortDesc`, `sortAsc`, `limit`, `from`, `exactMatch`, `fulltext`, `nodeType`, `count` and `facets`.
+`query`, `sortDesc`, `sortAsc`, `limit`, `from`, `page`, `hitsPerPage`, `exactMatch`, `fulltext`, `nodeType`, `count`, `totalHits`, `totalPages` and `facets`.
 
 ## 👩‍💻 Credits
 

@@ -86,6 +86,30 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
+     * output records starting at $page
+     *
+     * @param integer $page
+     * @return QueryBuilderInterface
+     */
+    public function page($page): QueryBuilderInterface
+    {
+        $this->parameters['page'] = $page;
+        return $this;
+    }
+
+    /**
+     * output $hitsPerPage records
+     *
+     * @param integer $hitsPerPage
+     * @return QueryBuilderInterface
+     */
+    public function hitsPerPage($hitsPerPage): QueryBuilderInterface
+    {
+        $this->parameters['hitsPerPage'] = $hitsPerPage;
+        return $this;
+    }
+
+    /**
      * add an exact-match query for a given property
      *
      * @param string $propertyName
@@ -145,6 +169,34 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
 
         $results = $this->indexClient->search($this->query, $parameters);
         return $results->getEstimatedTotalHits();
+    }
+
+    /**
+     * Return the total number of pages for the query.
+     *
+     * @return int
+     */
+    public function totalPages(): int
+    {
+        $parameters = $this->parameters;
+        $parameters['filter'] = implode(' AND ', $this->parameters['filter']);
+
+        $results = $this->indexClient->search($this->query, $parameters);
+        return $results->getTotalPages();
+    }
+
+    /**
+     * Return the total number of hits for the query.
+     *
+     * @return int
+     */
+    public function totalHits(): int
+    {
+        $parameters = $this->parameters;
+        $parameters['filter'] = implode(' AND ', $this->parameters['filter']);
+
+        $results = $this->indexClient->search($this->query, $parameters);
+        return $results->getTotalHits();
     }
 
     /**

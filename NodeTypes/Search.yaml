@@ -1,0 +1,6 @@
+'Medienreaktor.Meilisearch:Search':
+  superTypes:
+    'Neos.Neos:Content': true
+  ui:
+    label: 'Search'
+    icon: 'icon-search'

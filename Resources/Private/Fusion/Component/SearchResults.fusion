@@ -1,0 +1,13 @@
+prototype(Medienreaktor.Meilisearch:Component.SearchResults) < prototype(Neos.Fusion:Component) {
+    searchResults = ${[]}
+
+    renderer = afx`
+        <ul>
+            <Neos.Fusion:Loop items={props.searchResults}>
+                <li>
+                    {item}
+                </li>
+            </Neos.Fusion:Loop>
+        </ul>
+    `
+}

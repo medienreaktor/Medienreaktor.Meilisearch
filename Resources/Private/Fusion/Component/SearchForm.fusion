@@ -1,0 +1,10 @@
+prototype(Medienreaktor.Meilisearch:Component.SearchForm) < prototype(Neos.Fusion:Component) {
+    searchTerm = ''
+
+    renderer = afx`
+        <form method="GET">
+            <input type="search" name="search" value={props.searchTerm} />
+            <button type="submit">Search</button>
+        </form>
+    `
+}

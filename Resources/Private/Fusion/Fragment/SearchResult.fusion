@@ -1,0 +1,16 @@
+prototype(Medienreaktor.Meilisearch:Fragment.SearchResult) < prototype(Neos.Fusion:Component) {
+    title = ${q(node).property('title')}
+    href = Neos.Neos:NodeUri {
+        node = ${node}
+    }
+
+    renderer = afx`
+        <div>
+            <h3>
+                <a href={props.href}>
+                    {props.title}
+                </a>
+            </h3>
+        </div>
+    `
+}

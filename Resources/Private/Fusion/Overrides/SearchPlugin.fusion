@@ -1,3 +1,0 @@
-prototype(Flowpack.SearchPlugin:SearchResultRenderer) {
-    itemRenderer.@context.searchHit = ${[]}
-}
