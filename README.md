@@ -25,36 +25,40 @@ Install via composer:
 
 Configure the Meilisearch client in your `Settings.yaml` and set the Endpoint and API Key:
 
-    Medienreaktor:
-      Meilisearch:
-        client:
-          endpoint: ''
-          apiKey: ''
+```yaml
+Medienreaktor:
+  Meilisearch:
+    client:
+      endpoint: ''
+      apiKey: ''
+```
 
 You can adjust all Meilisearch index settings to fit your needs (see [Meilisearch Documentation](https://www.meilisearch.com/docs/reference/api/settings)):
 
-    Medienreaktor:
-      Meilisearch:
-        settings:
-          filterableAttributes:
-            - '__identifier'
-            - '__dimensionshash'
-            - '__path'
-            - '__parentPath'
-            - '__type'
-            - '__typeAndSupertypes'
-            - '_hidden'
-            - '_hiddenBeforeDateTime'
-            - '_hiddenAfterDateTime'
-            - '_hiddenInIndex'
-          searchableAttributes:
-            - '__fulltext.text'
-            - '__fulltext.h1'
-            - '__fulltext.h2'
-            - '__fulltext.h3'
-            - '__fulltext.h4'
-            - '__fulltext.h5'
-            - '__fulltext.h6'
+```yaml
+Medienreaktor:
+  Meilisearch:
+    settings:
+      filterableAttributes:
+        - '__identifier'
+        - '__dimensionshash'
+        - '__path'
+        - '__parentPath'
+        - '__type'
+        - '__typeAndSupertypes'
+        - '_hidden'
+        - '_hiddenBeforeDateTime'
+        - '_hiddenAfterDateTime'
+        - '_hiddenInIndex'
+      searchableAttributes:
+        - '__fulltext.text'
+        - '__fulltext.h1'
+        - '__fulltext.h2'
+        - '__fulltext.h3'
+        - '__fulltext.h4'
+        - '__fulltext.h5'
+        - '__fulltext.h6'
+```
 
 After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`. 
 
