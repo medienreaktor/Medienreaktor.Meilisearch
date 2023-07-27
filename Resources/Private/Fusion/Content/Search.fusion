@@ -10,6 +10,7 @@ prototype(Medienreaktor.Meilisearch:Search) < prototype(Neos.Neos:ContentCompone
         hitsPerPage = ${value.hitsPerPage(this.hitsPerPage)}
         filter = ${value.exactMatchMultiple(this.filterBy)}
         filter.@if.hasFilter = ${this.filterBy}
+        highlight = ${value.highlight(['__fulltext.text'])}
     }
     @context.searchQuery = ${this.searchQuery}
 
@@ -18,11 +19,11 @@ prototype(Medienreaktor.Meilisearch:Search) < prototype(Neos.Neos:ContentCompone
     totalHits = ${this.searchQuery.totalHits()}
 
     searchResults = Neos.Fusion:Map {
-        items = ${searchQuery.execute()}
-        itemName = 'node'
+        items = ${searchQuery.executeRaw()}
+        itemName = 'hit'
         itemRenderer = Medienreaktor.Meilisearch:Helper.SearchResultCase
         itemRenderer.@context {
-            title = ${q(node).property('title')}
+            node = ${hit.__node}
         }
     }
 

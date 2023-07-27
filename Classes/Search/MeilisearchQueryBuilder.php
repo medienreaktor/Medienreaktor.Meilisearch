@@ -150,6 +150,20 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
+     * Select attributes to highlight
+     *
+     * @param array $attributes
+     * @return QueryBuilderInterface
+     */
+    public function highlight(array $attributes): QueryBuilderInterface
+    {
+        $this->parameters['attributesToCrop'] = $attributes;
+        $this->parameters['attributesToHighlight'] = $attributes;
+        $this->parameters['cropLength'] = 20;
+        return $this;
+    }
+
+    /**
      * Execute the query and return the list of nodes as result
      *
      * @return \Traversable<\Neos\ContentRepository\Domain\Model\NodeInterface>
@@ -167,6 +181,27 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
             }
         }
         return (new \ArrayObject(array_values($nodes)))->getIterator();
+    }
+
+    /**
+     * Execute the query and return the raw results enriched with node information
+     *
+     * @return \Traversable<\Neos\ContentRepository\Domain\Model\NodeInterface>
+     */
+    public function executeRaw(): \Traversable
+    {
+        $results = $this->indexClient->search($this->query, $this->parameters);
+
+        $hits = [];
+        foreach ($results->getHits() as $hit) {
+            $nodePath = $hit['__path'];
+            $node = $this->contextNode->getNode($nodePath);
+            if ($node instanceof NodeInterface) {
+                $hit['__node'] = $node;
+                $hits[(string) $node->getNodeAggregateIdentifier()] = $hit;
+            }
+        }
+        return (new \ArrayObject(array_values($hits)))->getIterator();
     }
 
     /**

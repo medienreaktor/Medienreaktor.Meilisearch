@@ -3,6 +3,7 @@ prototype(Medienreaktor.Meilisearch:Fragment.SearchResult) < prototype(Neos.Fusi
     href = Neos.Neos:NodeUri {
         node = ${node}
     }
+    highlight = ${hit._formatted.__fulltext.text}
 
     renderer = afx`
         <div>
@@ -11,6 +12,9 @@ prototype(Medienreaktor.Meilisearch:Fragment.SearchResult) < prototype(Neos.Fusi
                     {props.title}
                 </a>
             </h3>
+            <p>
+                {props.highlight}
+            </p>
         </div>
     `
 }

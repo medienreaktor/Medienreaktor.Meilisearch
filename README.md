@@ -9,9 +9,9 @@ This package aims for simplicity and minimal dependencies. It might therefore no
 * ✅ Indexing the Neos Content Repository in Meilisearch
 * ✅ Supports Content Dimensions for all node variants
 * ✅ CLI commands for building and flushing the index
-* ✅ Querying the index via Eel-Helpers as usually
-* ✅ Frontend search form, result rendering and pagination including faceting
-* ✅ Faceting query to get facet distribution for node properties
+* ✅ Querying the index via Search-/Eel-Helpers and QueryBuilder
+* ✅ Frontend search form, result rendering and pagination
+* ✅ Faceting and snippet highlighting
 * 🟠 Only indexing the Live-Workspace for now
 * 🟠 Documentation (this README) just covers the basics
 * 🔴 No asset indexing (yet)
@@ -115,7 +115,7 @@ You can also use search queries, results and facets in your own Fusion component
 If you want facet distribution for certain node properties or search in them, make sure to add them to `filterableAttributes` and/or `searchableAttributes` in your `Settings.yaml`.
 
 The search query builder currently supports the following features:
-`query`, `sortDesc`, `sortAsc`, `limit`, `from`, `page`, `hitsPerPage`, `exactMatch`, `exactMatchMultiple`, `fulltext`, `nodeType`, `count`, `totalHits`, `totalPages` and `facets`.
+`query`, `sortDesc`, `sortAsc`, `limit`, `from`, `page`, `hitsPerPage`, `exactMatch`, `exactMatchMultiple`, `fulltext`, `nodeType`, `highlight`, `count`, `totalHits`, `totalPages`, `facets`, `execute` and `executeRaw`.
 
 ## 👩‍💻 Credits
 
