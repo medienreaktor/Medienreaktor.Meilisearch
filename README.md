@@ -10,8 +10,8 @@ This package aims for simplicity and minimal dependencies. It might therefore no
 * ✅ Supports Content Dimensions for all node variants
 * ✅ CLI commands for building and flushing the index
 * ✅ Querying the index via Eel-Helpers as usually
+* ✅ Frontend search form, result rendering and pagination including faceting
 * ✅ Faceting query to get facet distribution for node properties
-* ✅ Frontend search form, result rendering and pagination
 * 🟠 Only indexing the Live-Workspace for now
 * 🟠 Documentation (this README) just covers the basics
 * 🔴 No asset indexing (yet)
@@ -93,27 +93,29 @@ Properties of Content NodeTypes that should be included in fulltext search must 
 
 There is a built-in Content NodeType `Medienreaktor.Meilisearch:Search` for rendering the search form, results and pagination that may serve as a boilerplate for your projects. Just place it on your search page to start.
 
-You can use search queries, results and facets in your own Fusion components as usually:
+You can also use search queries, results and facets in your own Fusion components.
 
-    prototype(Vendor:Content.Search) < prototype(Neos.Neos:ContentComponent) {
+    prototype(Medienreaktor.Meilisearch:Search) < prototype(Neos.Neos:ContentComponent) {
         searchTerm = ${String.toString(request.arguments.search)}
-        searchQuery = ${this.searchTerm ? Search.query(site).fulltext(this.searchTerm).nodeType('Neos.Neos:Document') : null}
 
         page = ${String.toInteger(request.arguments.page) || 1}
         hitsPerPage = 10
 
-        paginatedSearchQuery = ${this.searchQuery.page(this.page).hitsPerPage(this.hitsPerPage)}
+        searchQuery = ${this.searchTerm ? Search.query(site).fulltext(this.searchTerm).nodeType('Neos.Neos:Document') : null}
+        searchQuery.@process {
+            page = ${value.page(this.page)}
+            hitsPerPage = ${value.hitsPerPage(this.hitsPerPage)}
+        }
 
-        totalPages = ${this.paginatedSearchQuery.totalPages()}
-        totalHits = ${this.paginatedSearchQuery.totalHits()}
-
-        facets = ${this.searchQuery.facets(['__type'])}
+        facets = ${this.searchQuery.facets(['__type', '__parentPath'])}
+        totalPages = ${this.searchQuery.totalPages()}
+        totalHits = ${this.searchQuery.totalHits()}
     }
 
 If you want facet distribution for certain node properties or search in them, make sure to add them to `filterableAttributes` and/or `searchableAttributes` in your `Settings.yaml`.
 
 The search query builder currently supports the following features:
-`query`, `sortDesc`, `sortAsc`, `limit`, `from`, `page`, `hitsPerPage`, `exactMatch`, `fulltext`, `nodeType`, `count`, `totalHits`, `totalPages` and `facets`.
+`query`, `sortDesc`, `sortAsc`, `limit`, `from`, `page`, `hitsPerPage`, `exactMatch`, `exactMatchMultiple`, `fulltext`, `nodeType`, `count`, `totalHits`, `totalPages` and `facets`.
 
 ## 👩‍💻 Credits
 

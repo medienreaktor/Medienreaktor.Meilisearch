@@ -123,6 +123,20 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
+     * add an exact-match query for multiple given properties
+     *
+     * @param array $propertyNameValuePairs
+     * @return QueryBuilderInterface
+     */
+    public function exactMatchMultiple(array $propertyNameValuePairs): QueryBuilderInterface
+    {
+        foreach ($propertyNameValuePairs as $propertyName => $propertyValue) {
+            $this->parameters['filter'][] = $propertyName . ' = "' . $propertyValue . '"';
+        }
+        return $this;
+    }
+
+    /**
      * Match the searchword against the fulltext index
      *
      * @param string $searchWord

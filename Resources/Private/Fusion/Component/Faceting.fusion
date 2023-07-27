@@ -1,0 +1,76 @@
+prototype(Medienreaktor.Meilisearch:Component.Faceting) < prototype(Neos.Fusion:Component) {
+    searchTerm = ''
+    filterBy = ${[]}
+    facets = ${[]}
+
+    resetLink = Neos.Neos:NodeUri {
+        node = ${documentNode}
+        additionalParams = Neos.Fusion:RawArray {
+            search = ${props.searchTerm}
+        }
+    }
+
+    renderer = afx`
+        <div>
+            <Neos.Fusion:Loop items={props.facets} itemKey="key">
+                <h4>{key}</h4>
+                <ul>
+                    <Neos.Fusion:Loop items={item} itemKey="value" itemName="count">
+                        <li>
+                            <Medienreaktor.Meilisearch:Component.Faceting.Link
+                                searchTerm={props.searchTerm}
+                                filterBy={props.filterBy}
+                                key={key}
+                                value={value}>
+                                {value} ({count})
+                            </Medienreaktor.Meilisearch:Component.Faceting.Link>
+                        </li>
+                    </Neos.Fusion:Loop>
+                </ul>
+            </Neos.Fusion:Loop>
+            <div @if={props.filterBy}>
+                <a href={props.resetLink}>Reset all filters</a>
+            </div>
+        </div>
+    `
+}
+
+prototype(Medienreaktor.Meilisearch:Component.Faceting.Link) < prototype(Neos.Fusion:Component) {
+    searchTerm = ''
+    filterBy = ${[]}
+    key = ''
+    value = ''
+    content = ''
+
+    @context.key = ${this.key}
+    @context.value = ${this.value}
+
+    filter = Neos.Fusion:Map {
+        items = ${[value]}
+        itemRenderer = ${value}
+        keyRenderer = ${key}
+    }
+
+    renderer = Neos.Neos:NodeLink {
+        node = ${documentNode}
+        additionalParams = Neos.Fusion:DataStructure {
+            search = ${props.searchTerm}
+            filterBy = Neos.Fusion:Case {
+                filterIsActive {
+                    condition = ${props.filterBy[props.key] == props.value}
+                    // Remove current filter from the link if it is already active
+                    renderer = ${Array.filter(props.filterBy, (value, key) => key != props.key && value != props.value)}
+                }
+                default {
+                    condition = ${true}
+                    // Add current filter to the link
+                    renderer = ${Array.concat(props.filterBy, props.filter)}
+                }
+            }
+        }
+        attributes {
+            class = ${props.filterBy[props.key] == props.value ? 'active' : ''}
+        }
+        content = ${props.content}
+    }
+}

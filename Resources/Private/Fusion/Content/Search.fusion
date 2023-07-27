@@ -1,17 +1,24 @@
 prototype(Medienreaktor.Meilisearch:Search) < prototype(Neos.Neos:ContentComponent) {
     searchTerm = ${String.toString(request.arguments.search)}
-    searchQuery = ${this.searchTerm ? Search.query(site).fulltext(this.searchTerm).nodeType('Neos.Neos:Document') : null}
-
+    filterBy = ${request.arguments.filterBy}
     page = ${String.toInteger(request.arguments.page) || 1}
     hitsPerPage = 10
 
-    @context.paginatedSearchQuery = ${this.searchQuery.page(this.page).hitsPerPage(this.hitsPerPage)}
+    searchQuery = ${this.searchTerm ? Search.query(site).fulltext(this.searchTerm).nodeType('Neos.Neos:Document') : null}
+    searchQuery.@process {
+        page = ${value.page(this.page)}
+        hitsPerPage = ${value.hitsPerPage(this.hitsPerPage)}
+        filter = ${value.exactMatchMultiple(this.filterBy)}
+        filter.@if.hasFilter = ${this.filterBy}
+    }
+    @context.searchQuery = ${this.searchQuery}
 
-    totalPages = ${paginatedSearchQuery.totalPages()}
-    totalHits = ${paginatedSearchQuery.totalHits()}
+    facets = ${this.searchQuery.facets(['__type', '__parentPath'])}
+    totalPages = ${this.searchQuery.totalPages()}
+    totalHits = ${this.searchQuery.totalHits()}
 
     searchResults = Neos.Fusion:Map {
-        items = ${paginatedSearchQuery.execute()}
+        items = ${searchQuery.execute()}
         itemName = 'node'
         itemRenderer = Medienreaktor.Meilisearch:Helper.SearchResultCase
         itemRenderer.@context {
@@ -25,12 +32,18 @@ prototype(Medienreaktor.Meilisearch:Search) < prototype(Neos.Neos:ContentCompone
             <div @if={props.searchResults}>
                 <Medienreaktor.Meilisearch:Component.Pagination
                     searchTerm={props.searchTerm}
+                    filterBy={props.filterBy}
                     page={props.page}
                     hitsPerPage={props.hitsPerPage}
                     hits={Array.length(props.searchResults)}
                     totalPages={props.totalPages}
                     totalHits={props.totalHits} />
-                <Medienreaktor.Meilisearch:Component.SearchResults searchResults={props.searchResults} />
+                <Medienreaktor.Meilisearch:Component.Faceting
+                    searchTerm={props.searchTerm}
+                    filterBy={props.filterBy}
+                    facets={props.facets} />
+                <Medienreaktor.Meilisearch:Component.SearchResults
+                    searchResults={props.searchResults} />
             </div>
             <div @if={props.searchTerm && ! props.searchResults}>
                 No results found.

@@ -1,5 +1,6 @@
 prototype(Medienreaktor.Meilisearch:Component.Pagination) < prototype(Neos.Fusion:Component) {
     searchTerm = ''
+    filterBy = ${[]}
     page = 1
     hits = 0
     hitsPerPage = 1
@@ -18,6 +19,7 @@ prototype(Medienreaktor.Meilisearch:Component.Pagination) < prototype(Neos.Fusio
                     additionalParams = Neos.Fusion:RawArray {
                         search = ${props.searchTerm}
                         page = ${page}
+                        filterBy = ${props.filterBy}
                     }
                 }
             }
