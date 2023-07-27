@@ -115,7 +115,27 @@ You can also use search queries, results and facets in your own Fusion component
 If you want facet distribution for certain node properties or search in them, make sure to add them to `filterableAttributes` and/or `searchableAttributes` in your `Settings.yaml`.
 
 The search query builder currently supports the following features:
-`query`, `sortDesc`, `sortAsc`, `limit`, `from`, `page`, `hitsPerPage`, `exactMatch`, `exactMatchMultiple`, `fulltext`, `nodeType`, `highlight`, `count`, `totalHits`, `totalPages`, `facets`, `execute` and `executeRaw`.
+
+| Query feature                                | Description                                                |
+|----------------------------------------------|------------------------------------------------------------|
+| `query(context)`                             | Sets the starting point for this query, e.g. `query(site)` |
+| `nodeType(nodeTypeName)`                     | Filters by the given NodeType, e.g. `nodeType('Neos.Neos:Document')` |
+| `fulltext(searchTerm)`                       | Performs a fulltext search |
+| `exactMatch(propertyName, value)`            | Filters by a node property |
+| `exactMatchMultiple(array)`                  | Filters by multiple node properties, e.g. `exactMatchMultiple(['author' => 'foo', 'date' => 'bar'])` |
+| `sortAsc(propertyName)`                      | Sort ascending by property |
+| `sortDesc(propertyName)`                     | Sort descending by property |
+| `limit(value)`                               | Limit results, e.g. `limit(10)` |
+| `from(value)`                                | Return results starting from, e.g. `from(10)` |
+| `page(value)`                                | Return paged results for given page, e.g. `page(1)` |
+| `hitsPerPage(value)`                         | Hits per page for paged results, e.g. `hitsPerPage(10)` |
+| `count()`                                    | Get total results count for non-paged results |
+| `totalHits()`                                | Get total hits for paged results |
+| `totalPages()`                               | Get total pages for paged results |
+| `facets(array)`                              | Return facet distribution for given facets, e.g. `facets(['__type', '__parentPath'])` |
+| `highlight(array)`                           | Highlight search results for given properties, e.g. `highlight(['__fulltext.text'])` |
+| `execute()`                                  | Execute the query and return resulting nodes |
+| `executeRaw()`                               | Execute the query and return raw Meilisearch result data, enriched with node data |
 
 ## 👩‍💻 Credits
 
