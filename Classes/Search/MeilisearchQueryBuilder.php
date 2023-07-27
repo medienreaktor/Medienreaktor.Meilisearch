@@ -156,9 +156,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function execute(): \Traversable
     {
-        $parameters = $this->parameters;
-        $parameters['filter'] = implode(' AND ', $this->parameters['filter']);
-        $results = $this->indexClient->search($this->query, $parameters);
+        $results = $this->indexClient->search($this->query, $this->parameters);
 
         $nodes = [];
         foreach ($results->getHits() as $hit) {
@@ -178,10 +176,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function count(): int
     {
-        $parameters = $this->parameters;
-        $parameters['filter'] = implode(' AND ', $this->parameters['filter']);
-
-        $results = $this->indexClient->search($this->query, $parameters);
+        $results = $this->indexClient->search($this->query, $this->parameters);
         return $results->getEstimatedTotalHits();
     }
 
@@ -192,10 +187,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function totalPages(): int
     {
-        $parameters = $this->parameters;
-        $parameters['filter'] = implode(' AND ', $this->parameters['filter']);
-
-        $results = $this->indexClient->search($this->query, $parameters);
+        $results = $this->indexClient->search($this->query, $this->parameters);
         return $results->getTotalPages();
     }
 
@@ -206,10 +198,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function totalHits(): int
     {
-        $parameters = $this->parameters;
-        $parameters['filter'] = implode(' AND ', $this->parameters['filter']);
-
-        $results = $this->indexClient->search($this->query, $parameters);
+        $results = $this->indexClient->search($this->query, $this->parameters);
         return $results->getTotalHits();
     }
 
@@ -221,11 +210,9 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function facets(array $facets): array
     {
-        $parameters = $this->parameters;
-        $parameters['filter'] = implode(' AND ', $this->parameters['filter']);
-        $parameters['facets'] = $facets;
+        $this->parameters['facets'] = $facets;
 
-        $results = $this->indexClient->search($this->query, $parameters);
+        $results = $this->indexClient->search($this->query, $this->parameters);
         return $results->getFacetDistribution();
     }
 

@@ -133,6 +133,10 @@ class MeilisearchIndex implements IndexInterface
      */
     public function search(string $query, array $parameters): SearchResult
     {
+        if (isset($parameters['filter']) && is_array($parameters['filter'])) {
+            $parameters['filter'] = implode(' AND ', $parameters['filter']);
+        }
+
         $results = $this->index->search($query, $parameters);
         return $results;
     }
