@@ -13,7 +13,6 @@ This package aims for simplicity and minimal dependencies. It might therefore no
 * ✅ Frontend search form, result rendering and pagination
 * ✅ Faceting and snippet highlighting
 * 🟠 Only indexing the Live-Workspace for now
-* 🟠 Documentation (this README) just covers the basics
 * 🔴 No asset indexing (yet)
 * 🔴 No autocomplete / autosuggest (this is currently not supported by Meilisearch)
 
@@ -107,7 +106,7 @@ Properties of Content NodeTypes that should be included in fulltext search must 
         fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.text)}"
 ```
 
-## 📖 Usage
+## 📖 Usage with Neos and Fusion
 
 There is a built-in Content NodeType `Medienreaktor.Meilisearch:Search` for rendering the search form, results and pagination that may serve as a boilerplate for your projects. Just place it on your search page to start.
 
@@ -132,7 +131,7 @@ You can also use search queries, results and facets in your own Fusion component
 
 If you want facet distribution for certain node properties or search in them, make sure to add them to `filterableAttributes` and/or `searchableAttributes` in your `Settings.yaml`.
 
-The search query builder currently supports the following features:
+The search query builder supports the following features:
 
 | Query feature                                | Description                                                |
 |----------------------------------------------|------------------------------------------------------------|
@@ -157,6 +156,18 @@ The search query builder currently supports the following features:
 | `matchingStrategy(value)`                    | Sets the matching strategy `'last'` or `'all'`, (default: `'last'`)
 | `execute()`                                  | Execute the query and return resulting nodes |
 | `executeRaw()`                               | Execute the query and return raw Meilisearch result data, enriched with node data |
+
+## ⚡ Usage with JavaScript / React / Vue
+
+If you want to build your frontend with JavaScript, React or Vue, you can completely ignore above Neos and Fusion integration and use `instant-meilisearch`. 
+
+Please mind two things:
+
+1. Setup your filter to always include the following filter string:
+`(__parentPath = "$nodePath" OR __path = "$nodePath") AND __dimensionshash = "$dimensionsHash"`
+where `$nodePath` is the NodePath of your context node (e.g. site) and `$dimensionHash` is the MD5-hashed JSON-encoded context dimensions array.
+
+2. There are no URLs (yet) in the Meilisearch index. Sorry! We would love to have this feature, probably by generating the URLs at indexing time – but it is just not implemented yet. (Contributions welcome!)
 
 ## 👩‍💻 Credits
 
