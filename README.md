@@ -161,13 +161,24 @@ The search query builder supports the following features:
 
 If you want to build your frontend with JavaScript, React or Vue, you can completely ignore above Neos and Fusion integration and use `instant-meilisearch`. 
 
-Please mind two things:
+Please mind these two things:
 
-1. Setup your filter to always include the following filter string:
+### 1. Filtering for node context and dimensions
+
+Setup your filter to always include the following filter string:
 `(__parentPath = "$nodePath" OR __path = "$nodePath") AND __dimensionshash = "$dimensionsHash"`
 where `$nodePath` is the NodePath of your context node (e.g. site) and `$dimensionHash` is the MD5-hashed JSON-encoded context dimensions array.
 
-2. There are no URLs (yet) in the Meilisearch index. Sorry! We would love to have this feature, probably by generating the URLs at indexing time – but it is just not implemented yet. (Contributions welcome!)
+You can obtain these values in PHP using:
+
+```php
+$nodePath = (string) $contextNode->findNodePath();
+$dimensionsHash = md5(json_encode($contextNode->getContext()->getDimensions()));
+```
+
+### 2. There are no URLs (yet)
+
+There are no URLs (yet) in the Meilisearch index. Sorry! We would love to have this feature, probably by generating the URLs at indexing time – but it is just not implemented yet. (Contributions welcome!)
 
 ## 👩‍💻 Credits
 
