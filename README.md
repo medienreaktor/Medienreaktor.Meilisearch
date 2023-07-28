@@ -122,7 +122,7 @@ The search query builder currently supports the following features:
 | `nodeType(nodeTypeName)`                     | Filters by the given NodeType, e.g. `nodeType('Neos.Neos:Document')` |
 | `fulltext(searchTerm)`                       | Performs a fulltext search |
 | `exactMatch(propertyName, value)`            | Filters by a node property |
-| `exactMatchMultiple(array)`                  | Filters by multiple node properties, e.g. `exactMatchMultiple(['author' => 'foo', 'date' => 'bar'])` |
+| `exactMatchMultiple(properties)`             | Filters by multiple node properties, e.g. `exactMatchMultiple(['author' => 'foo', 'date' => 'bar'])` |
 | `sortAsc(propertyName)`                      | Sort ascending by property |
 | `sortDesc(propertyName)`                     | Sort descending by property |
 | `limit(value)`                               | Limit results, e.g. `limit(10)` |
@@ -133,7 +133,8 @@ The search query builder currently supports the following features:
 | `totalHits()`                                | Get total hits for paged results |
 | `totalPages()`                               | Get total pages for paged results |
 | `facets(array)`                              | Return facet distribution for given facets, e.g. `facets(['__type', '__parentPath'])` |
-| `highlight(array)`                           | Highlight search results for given properties, e.g. `highlight(['__fulltext.text'])` |
+| `highlight(properties, highlightTags)`       | Highlight search results for given properties, e.g. `highlight(['__fulltext.text'])`, highlighted with given tags (optional, default: `['<em'>, '</em>']`) |
+| `crop(cropLength, cropMarker)`               | Sets the highlighting snippets length in words and the crop marker (optional, default: `'…'`) |
 | `execute()`                                  | Execute the query and return resulting nodes |
 | `executeRaw()`                               | Execute the query and return raw Meilisearch result data, enriched with node data |
 

@@ -62,7 +62,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * output only $limit records
+     * Limit results to $limit records
      *
      * @param int $limit
      * @return QueryBuilderInterface
@@ -74,9 +74,9 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * output records starting at $from
+     * Fetch results starting at $from
      *
-     * @param integer $from
+     * @param int $from
      * @return QueryBuilderInterface
      */
     public function from($from): QueryBuilderInterface
@@ -86,9 +86,9 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * output records starting at $page
+     * Fetch results starting at $page
      *
-     * @param integer $page
+     * @param int $page
      * @return QueryBuilderInterface
      */
     public function page($page): QueryBuilderInterface
@@ -98,9 +98,9 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * output $hitsPerPage records
+     * Get $hitsPerPage results per page
      *
-     * @param integer $hitsPerPage
+     * @param int $hitsPerPage
      * @return QueryBuilderInterface
      */
     public function hitsPerPage($hitsPerPage): QueryBuilderInterface
@@ -110,7 +110,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * add an exact-match query for a given property
+     * Match a given node property
      *
      * @param string $propertyName
      * @param mixed $propertyValue
@@ -123,7 +123,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * add an exact-match query for multiple given properties
+     * Match multiple given node properties
      *
      * @param array $propertyNameValuePairs
      * @return QueryBuilderInterface
@@ -137,7 +137,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * Match the searchword against the fulltext index
+     * Match the search word against the fulltext index
      *
      * @param string $searchWord
      * @param array $options
@@ -153,13 +153,30 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * Select attributes to highlight
      *
      * @param array $attributes
+     * @param array $highlightTags
      * @return QueryBuilderInterface
      */
-    public function highlight(array $attributes): QueryBuilderInterface
+    public function highlight(array $attributes, array $highlightTags = ['<em>', '</em>']): QueryBuilderInterface
     {
         $this->parameters['attributesToCrop'] = $attributes;
         $this->parameters['attributesToHighlight'] = $attributes;
         $this->parameters['cropLength'] = 20;
+        $this->parameters['highlightPreTag'] = $highlightTags[0];
+        $this->parameters['highlightPostTag'] = $highlightTags[1];
+        return $this;
+    }
+
+    /**
+     * Set highlight crop length and marker
+     *
+     * @param int $cropLength
+     * @param string $cropMarker
+     * @return QueryBuilderInterface
+     */
+    public function crop($cropLength, string $cropMarker = '…'): QueryBuilderInterface
+    {
+        $this->parameters['cropLength'] = $cropLength;
+        $this->parameters['cropMarker'] = $cropMarker;
         return $this;
     }
 
