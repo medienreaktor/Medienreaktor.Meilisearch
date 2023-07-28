@@ -35,12 +35,22 @@ Medienreaktor:
       apiKey: ''
 ```
 
-You can adjust all Meilisearch index settings to fit your needs (see [Meilisearch Documentation](https://www.meilisearch.com/docs/reference/api/settings)):
+You can adjust all Meilisearch index settings to fit your needs (see [Meilisearch Documentation](https://www.meilisearch.com/docs/reference/api/settings)). All settings configured here will directly be passed to Meilisearch.
 
 ```yaml
 Medienreaktor:
   Meilisearch:
     settings:
+      displayedAttributes:
+        - '*'
+      searchableAttributes:
+        - '__fulltext.text'
+        - '__fulltext.h1'
+        - '__fulltext.h2'
+        - '__fulltext.h3'
+        - '__fulltext.h4'
+        - '__fulltext.h5'
+        - '__fulltext.h6'
       filterableAttributes:
         - '__identifier'
         - '__dimensionshash'
@@ -52,14 +62,22 @@ Medienreaktor:
         - '_hiddenBeforeDateTime'
         - '_hiddenAfterDateTime'
         - '_hiddenInIndex'
-      searchableAttributes:
-        - '__fulltext.text'
-        - '__fulltext.h1'
-        - '__fulltext.h2'
-        - '__fulltext.h3'
-        - '__fulltext.h4'
-        - '__fulltext.h5'
-        - '__fulltext.h6'
+      sortableAttributes: []
+      rankingRules:
+        - 'words'
+        - 'typo'
+        - 'proximity'
+        - 'attribute'
+        - 'sort'
+        - 'exactness'
+      stopWords: []
+      typoTolerance:
+        enabled: true
+        minWordSizeForTypos:
+          oneTypo: 5
+          twoTypos: 9
+      faceting:
+        maxValuesPerFacet: 100
 ```
 
 Please do not remove, only extend, above `filterableAttributes`, as they are needed for base functionality to work.
