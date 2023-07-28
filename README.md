@@ -121,6 +121,7 @@ The search query builder currently supports the following features:
 | `query(context)`                             | Sets the starting point for this query, e.g. `query(site)` |
 | `nodeType(nodeTypeName)`                     | Filters by the given NodeType, e.g. `nodeType('Neos.Neos:Document')` |
 | `fulltext(searchTerm)`                       | Performs a fulltext search |
+| `filter(filterString)`                       | Filters by given filter string, e.g. `filter('__typeAndSupertypes = "Neos.Neos:Document"')` (see [Meilisearch Documentation](https://www.meilisearch.com/docs/reference/api/search#filter))  |
 | `exactMatch(propertyName, value)`            | Filters by a node property |
 | `exactMatchMultiple(properties)`             | Filters by multiple node properties, e.g. `exactMatchMultiple(['author' => 'foo', 'date' => 'bar'])` |
 | `sortAsc(propertyName)`                      | Sort ascending by property |
@@ -135,6 +136,7 @@ The search query builder currently supports the following features:
 | `facets(array)`                              | Return facet distribution for given facets, e.g. `facets(['__type', '__parentPath'])` |
 | `highlight(properties, highlightTags)`       | Highlight search results for given properties, e.g. `highlight(['__fulltext.text'])`, highlighted with given tags (optional, default: `['<em'>, '</em>']`) |
 | `crop(cropLength, cropMarker)`               | Sets the highlighting snippets length in words and the crop marker (optional, default: `'…'`) |
+| `matchingStrategy(value)`                    | Sets the matching strategy `'last'` or `'all'`, (default: `'last'`)
 | `execute()`                                  | Execute the query and return resulting nodes |
 | `executeRaw()`                               | Execute the query and return raw Meilisearch result data, enriched with node data |
 

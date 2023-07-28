@@ -110,6 +110,18 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
+     * Filter results by filter string
+     *
+     * @param string $filterString
+     * @return QueryBuilderInterface
+     */
+    public function filter(string $filterString): QueryBuilderInterface
+    {
+        $this->parameters['filter'][] = $filterString;
+        return $this;
+    }
+
+    /**
      * Match a given node property
      *
      * @param string $propertyName
@@ -177,6 +189,18 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     {
         $this->parameters['cropLength'] = $cropLength;
         $this->parameters['cropMarker'] = $cropMarker;
+        return $this;
+    }
+
+    /**
+     * Sets the matching strategy
+     *
+     * @param string $matchingStrategy
+     * @return QueryBuilderInterface
+     */
+    public function matchingStrategy(string $matchingStrategy): QueryBuilderInterface
+    {
+        $this->parameters['matchingStrategy'] = $matchingStrategy;
         return $this;
     }
 
