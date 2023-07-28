@@ -9,9 +9,22 @@ use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraints;
 use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraintFactory;
 use Neos\ContentRepository\Domain\Service\ContentDimensionPresetSourceInterface;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
+use Neos\ContentRepository\Domain\Service\Context;
 use Neos\ContentRepository\Exception\NodeException;
 use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
 use Neos\Flow\Annotations as Flow;
+use Neos\Flow\Http\ServerRequestAttributes;
+use Neos\Flow\Mvc\ActionRequest;
+use Neos\Flow\Mvc\Controller\ControllerContext;
+use Neos\Flow\Mvc;
+use Neos\Flow\Mvc\Routing\Dto\RouteParameters;
+use Neos\Flow\Mvc\Routing\UriBuilder;
+use Neos\Neos\Domain\Model\Site;
+use Neos\Neos\Domain\Repository\SiteRepository;
+use Neos\Neos\Service\LinkingService;
+use Psr\Http\Message\ServerRequestFactoryInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\UriFactoryInterface;
 
 /**
  * Indexer for Content Repository Nodes.
@@ -43,6 +56,41 @@ class NodeIndexer extends AbstractNodeIndexer
      * @var ContextFactoryInterface
      */
     protected $contextFactory;
+
+    /**
+     * @var ControllerContext
+     */
+    protected $controllerContext;
+
+    /**
+     * @Flow\Inject
+     * @var ServerRequestFactoryInterface
+     */
+    protected $requestFactory;
+
+    /**
+     * @Flow\Inject
+     * @var UriFactoryInterface
+     */
+    protected $uriFactory;
+
+    /**
+	 * @Flow\Inject
+	 * @var LinkingService
+	 */
+    protected $linkingService;
+
+    /**
+     * @Flow\Inject
+     * @var SiteRepository
+     */
+    protected $siteRepository;
+
+    public function initializeObject($cause)
+    {
+        parent::initializeObject($cause);
+        putenv('FLOW_REWRITEURLS=1');
+    }
 
     /**
      * @return IndexInterface
@@ -117,6 +165,10 @@ class NodeIndexer extends AbstractNodeIndexer
             $document['id'] = $identifier;
             $document['__fulltext'] = $fulltext;
 
+            if ($uri = $this->getNodeUri($node, $context)) {
+                $document['__uri'] = $uri;
+            }
+
             return $document;
         }
 
@@ -141,6 +193,62 @@ class NodeIndexer extends AbstractNodeIndexer
     public function flush(): void
     {
         return;
+    }
+
+    /**
+     * Get the node uri
+     *
+     * @param NodeInterface $node
+     * @param Context $context
+     * @return string
+     */
+    protected function getNodeUri(NodeInterface $node, Context $context): ?string
+    {
+        try {
+            return $this->linkingService->createNodeUri($this->getControllerContext($context), $node, $context->getCurrentSiteNode(), 'html', TRUE);
+        } catch (\Exception $e) {
+
+        }
+        return null;
+    }
+
+    /**
+     * Get the controller context
+     *
+     * @param Context $context
+     * @return ControllerContext
+     */
+    protected function getControllerContext(Context $context): ?ControllerContext
+    {
+        if ($this->controllerContext) {
+            return $this->controllerContext;
+        }
+
+        $siteNode = $context->getCurrentSiteNode();
+        $site = $this->siteRepository->findOneByNodeName($siteNode->getName());
+
+        if ($site && $site->isOnline()) {
+            $domain = $site->getPrimaryDomain();
+
+            if ($domain && $domain->getActive()) {
+                $requestUri = $this->uriFactory->createUri($domain->__toString());
+                $httpRequest = $this->requestFactory->createServerRequest('get', $requestUri);
+                $parameters = $httpRequest->getAttribute(ServerRequestAttributes::ROUTING_PARAMETERS) ?? RouteParameters::createEmpty();
+                $httpRequest = $httpRequest->withAttribute(ServerRequestAttributes::ROUTING_PARAMETERS, $parameters->withParameter('requestUriHost', $requestUri->getHost()));
+
+                $actionRequest = ActionRequest::fromHttpRequest($httpRequest);
+                $actionRequest->setFormat('html');
+
+                $uriBuilder = new UriBuilder();
+                $uriBuilder->setRequest($actionRequest);
+                $uriBuilder->setCreateAbsoluteUri(true);
+
+                $this->controllerContext = new ControllerContext($actionRequest, new Mvc\ActionResponse(), new Mvc\Controller\Arguments([]), $uriBuilder);
+                return $this->controllerContext;
+            }
+        }
+
+        return null;
     }
 
     /**

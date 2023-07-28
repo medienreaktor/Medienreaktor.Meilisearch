@@ -176,9 +176,13 @@ $nodePath = (string) $contextNode->findNodePath();
 $dimensionsHash = md5(json_encode($contextNode->getContext()->getDimensions()));
 ```
 
-### 2. There are no URLs (yet)
+### 2. The node URI
 
-There are no URLs (yet) in the Meilisearch index. Sorry! We would love to have this feature, probably by generating the URLs at indexing time – but it is just not implemented yet. (Contributions welcome!)
+The public URI to the node is in the `__uri` attribute of each Meilisearch result hit. 
+
+It is generated at indexing time and one reason we create separate index records for each node variant, even if they are redundant due to dimension fallback behaviour. This is in contrast to Flowpack.ElasticSearch.ContentRepositoryAdaptor, where only one record is created and multiple dimensions hashes are assigned.
+
+For the URI generation to work, it is important to have a primary domain assigned to each of your sites.
 
 ## 👩‍💻 Credits
 
