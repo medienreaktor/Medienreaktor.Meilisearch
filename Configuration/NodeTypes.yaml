@@ -1,32 +1,38 @@
 'Neos.Neos:Node': &node
   properties:
+    '_name':
+      search:
+        indexing: "${node.name}"
+    '_path':
+      search:
+        indexing: "${node.path}"
+    '_removed':
+      search:
+        indexing: ''
+    '_nodeType':
+      search:
+        indexing: "${node.nodeType.name}"
     '__identifier':
       search:
         indexing: "${node.identifier}"
-    '__workspace':
-      search:
-        indexing: "${node.context.workspace.name}"
     '__path':
       search:
         indexing: "${node.path}"
+    '__nodeType':
+      search:
+        indexing: "${node.nodeType.name}"
+    '__nodeTypeAndSupertypes':
+      search:
+        indexing: "${Indexing.extractNodeTypeNamesAndSupertypes(node.nodeType)}"
+    '__dimensionsHash':
+      search:
+        indexing: "${String.md5(Json.stringify(node.context.dimensions))}"
     '__parentPath':
       search:
         indexing: "${Indexing.buildAllPathPrefixes(node.parentPath)}"
     '__sortIndex':
       search:
         indexing: "${node.index}"
-    '_removed':
-      search:
-        indexing: ''
-    '__type':
-      search:
-        indexing: "${node.nodeType.name}"
-    '__typeAndSupertypes':
-      search:
-        indexing: "${Indexing.extractNodeTypeNamesAndSupertypes(node.nodeType)}"
-    '__dimensionshash':
-      search:
-        indexing: "${String.md5(Json.stringify(node.context.dimensions))}"
 
 'unstructured': *node
 

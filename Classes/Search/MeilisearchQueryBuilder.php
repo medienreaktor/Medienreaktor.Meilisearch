@@ -306,7 +306,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
         $dimensionsHash = md5(json_encode($contextNode->getContext()->getDimensions()));
 
         $this->parameters['filter'][] = '(__parentPath = "' . $nodePath . '" OR __path = "' . $nodePath . '")';
-        $this->parameters['filter'][] = '__dimensionshash = "' . $dimensionsHash . '"';
+        $this->parameters['filter'][] = '__dimensionsHash = "' . $dimensionsHash . '"';
 
         return $this;
     }
@@ -319,7 +319,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function nodeType(string $nodeType): QueryBuilderInterface
     {
-        $this->parameters['filter'][] = '__typeAndSupertypes = "' . $nodeType . '"';
+        $this->parameters['filter'][] = '__nodeTypeAndSupertypes = "' . $nodeType . '"';
         return $this;
     }
 

@@ -1,6 +1,7 @@
 # Medienreaktor.Meilisearch
 
-Integrates Meilisearch into Neos. *This is Work-in-Progress!*
+Integrates Meilisearch into Neos. 
+**Compatibility tested with Meilisearch 1.2 and 1.3.**
 
 This package aims for simplicity and minimal dependencies. It might therefore not be as sophisticated and extensible as packages like [Flowpack.ElasticSearch.ContentRepositoryAdaptor](https://github.com/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor), and to achieve this, some code parts had to be copied from these great packages (see Credits).
 
@@ -12,7 +13,6 @@ This package aims for simplicity and minimal dependencies. It might therefore no
 * ✅ Querying the index via Search-/Eel-Helpers and QueryBuilder
 * ✅ Frontend search form, result rendering and pagination
 * ✅ Faceting and snippet highlighting
-* 🟠 Only indexing the Live-Workspace for now
 * 🔴 No asset indexing (yet)
 * 🔴 No autocomplete / autosuggest (this is currently not supported by Meilisearch)
 
@@ -21,6 +21,8 @@ This package aims for simplicity and minimal dependencies. It might therefore no
 Install via composer:
 
     composer require medienreaktor/meilisearch
+
+There are several ways to install Meilisearch for development. If you are using DDEV, there is a [Meilisearch-snippet](https://github.com/ddev/ddev-contrib/tree/master/docker-compose-services/meilisearch).
 
 ## ⚙️ Configuration
 
@@ -52,11 +54,11 @@ Medienreaktor:
         - '__fulltext.h6'
       filterableAttributes:
         - '__identifier'
-        - '__dimensionshash'
+        - '__dimensionsHash'
         - '__path'
         - '__parentPath'
-        - '__type'
-        - '__typeAndSupertypes'
+        - '__nodeType'
+        - '__nodeTypeAndSupertypes'
         - '_hidden'
         - '_hiddenBeforeDateTime'
         - '_hiddenAfterDateTime'
@@ -79,9 +81,7 @@ Medienreaktor:
         maxValuesPerFacet: 100
 ```
 
-Please do not remove, only extend, above `filterableAttributes`, as they are needed for base functionality to work.
-
-After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`. 
+Please do not remove, only extend, above `filterableAttributes`, as they are needed for base functionality to work. After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`. 
 
 Document NodeTypes should be configured as fulltext root (this comes by default for all `Neos.Neos:Document` subtypes):
 
@@ -106,6 +106,13 @@ Properties of Content NodeTypes that should be included in fulltext search must 
         fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.text)}"
 ```
 
+You will see that some properties are indexed twice, like `_path` and `__path`, `_nodeType` and `__nodeType`. This is due to the different _privacy_ of these node properties:
+
+* `_*`-properties are default Neos node properties that are private to Neos (and may change)
+* `__*`-properties are private properties that are required for the Meilisearch-integration
+
+We have to make sure that our required properties are always there, so we better index them separately.
+
 ## 📖 Usage with Neos and Fusion
 
 There is a built-in Content NodeType `Medienreaktor.Meilisearch:Search` for rendering the search form, results and pagination that may serve as a boilerplate for your projects. Just place it on your search page to start.
@@ -124,7 +131,7 @@ You can also use search queries, results and facets in your own Fusion component
             hitsPerPage = ${value.hitsPerPage(this.hitsPerPage)}
         }
 
-        facets = ${this.searchQuery.facets(['__type', '__parentPath'])}
+        facets = ${this.searchQuery.facets(['__nodeType', '__parentPath'])}
         totalPages = ${this.searchQuery.totalPages()}
         totalHits = ${this.searchQuery.totalHits()}
     }
@@ -138,7 +145,7 @@ The search query builder supports the following features:
 | `query(context)`                             | Sets the starting point for this query, e.g. `query(site)` |
 | `nodeType(nodeTypeName)`                     | Filters by the given NodeType, e.g. `nodeType('Neos.Neos:Document')` |
 | `fulltext(searchTerm)`                       | Performs a fulltext search |
-| `filter(filterString)`                       | Filters by given filter string, e.g. `filter('__typeAndSupertypes = "Neos.Neos:Document"')` (see [Meilisearch Documentation](https://www.meilisearch.com/docs/reference/api/search#filter))  |
+| `filter(filterString)`                       | Filters by given filter string, e.g. `filter('__nodeTypeAndSupertypes = "Neos.Neos:Document"')` (see [Meilisearch Documentation](https://www.meilisearch.com/docs/reference/api/search#filter))  |
 | `exactMatch(propertyName, value)`            | Filters by a node property |
 | `exactMatchMultiple(properties)`             | Filters by multiple node properties, e.g. `exactMatchMultiple(['author' => 'foo', 'date' => 'bar'])` |
 | `sortAsc(propertyName)`                      | Sort ascending by property |
@@ -166,7 +173,7 @@ Please mind these two things:
 ### 1. Filtering for node context and dimensions
 
 Setup your filter to always include the following filter string:
-`(__parentPath = "$nodePath" OR __path = "$nodePath") AND __dimensionshash = "$dimensionsHash"`
+`(__parentPath = "$nodePath" OR __path = "$nodePath") AND __dimensionsHash = "$dimensionsHash"`
 where `$nodePath` is the NodePath of your context node (e.g. site) and `$dimensionHash` is the MD5-hashed JSON-encoded context dimensions array.
 
 You can obtain these values in PHP using:
@@ -174,6 +181,13 @@ You can obtain these values in PHP using:
 ```php
 $nodePath = (string) $contextNode->findNodePath();
 $dimensionsHash = md5(json_encode($contextNode->getContext()->getDimensions()));
+```
+
+In Fusion, you get these values (assuming `site` is your desired context node) using:
+
+```
+nodePath = ${site.path}
+dimensionsHash = ${String.md5(Json.stringify(site.context.dimensions))}
 ```
 
 ### 2. The node URI

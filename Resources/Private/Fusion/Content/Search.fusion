@@ -14,7 +14,7 @@ prototype(Medienreaktor.Meilisearch:Search) < prototype(Neos.Neos:ContentCompone
     }
     @context.searchQuery = ${this.searchQuery}
 
-    facets = ${this.searchQuery.facets(['__type', '__parentPath'])}
+    facets = ${this.searchQuery.facets(['__nodeType', '__parentPath'])}
     totalPages = ${this.searchQuery.totalPages()}
     totalHits = ${this.searchQuery.totalHits()}
 
