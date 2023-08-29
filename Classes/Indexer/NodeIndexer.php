@@ -205,7 +205,10 @@ class NodeIndexer extends AbstractNodeIndexer
     protected function getNodeUri(NodeInterface $node, Context $context): ?string
     {
         try {
-            return $this->linkingService->createNodeUri($this->getControllerContext($context), $node, $context->getCurrentSiteNode(), 'html', TRUE);
+            $controllerContext = $this->getControllerContext($context);
+            if ($controllerContext) {
+                return $this->linkingService->createNodeUri($controllerContext, $node, $context->getCurrentSiteNode(), 'html', TRUE);
+            }
         } catch (\Exception $e) {
 
         }
