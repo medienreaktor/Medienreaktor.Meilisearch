@@ -58,11 +58,6 @@ class NodeIndexer extends AbstractNodeIndexer
     protected $contextFactory;
 
     /**
-     * @var ControllerContext
-     */
-    protected $controllerContext;
-
-    /**
      * @Flow\Inject
      * @var ServerRequestFactoryInterface
      */
@@ -205,9 +200,19 @@ class NodeIndexer extends AbstractNodeIndexer
     protected function getNodeUri(NodeInterface $node, Context $context): ?string
     {
         try {
-            $controllerContext = $this->getControllerContext($context);
-            if ($controllerContext) {
-                return $this->linkingService->createNodeUri($controllerContext, $node, $context->getCurrentSiteNode(), 'html', TRUE);
+            $nodePath = $node->getPath();
+            $nodePathSegments = explode('/', $nodePath);
+
+            // Seems hacky, but we need to get the site by the node name here
+            // and extract the site name by the node's path
+            if (count($nodePathSegments) >= 3) {
+                $siteName = $nodePathSegments[2];
+                $site = $this->siteRepository->findOneByNodeName($siteName);
+
+                $controllerContext = $this->getControllerContext($site);
+                if ($controllerContext) {
+                    return $this->linkingService->createNodeUri($controllerContext, $node, $context->getCurrentSiteNode(), 'html', TRUE);
+                }
             }
         } catch (\Exception $e) {
 
@@ -218,18 +223,11 @@ class NodeIndexer extends AbstractNodeIndexer
     /**
      * Get the controller context
      *
-     * @param Context $context
+     * @param Site $site
      * @return ControllerContext
      */
-    protected function getControllerContext(Context $context): ?ControllerContext
+    protected function getControllerContext(Site $site): ?ControllerContext
     {
-        if ($this->controllerContext) {
-            return $this->controllerContext;
-        }
-
-        $siteNode = $context->getCurrentSiteNode();
-        $site = $this->siteRepository->findOneByNodeName($siteNode->getName());
-
         if ($site && $site->isOnline()) {
             $domain = $site->getPrimaryDomain();
 
@@ -246,8 +244,8 @@ class NodeIndexer extends AbstractNodeIndexer
                 $uriBuilder->setRequest($actionRequest);
                 $uriBuilder->setCreateAbsoluteUri(true);
 
-                $this->controllerContext = new ControllerContext($actionRequest, new Mvc\ActionResponse(), new Mvc\Controller\Arguments([]), $uriBuilder);
-                return $this->controllerContext;
+                $controllerContext = new ControllerContext($actionRequest, new Mvc\ActionResponse(), new Mvc\Controller\Arguments([]), $uriBuilder);
+                return $controllerContext;
             }
         }
 
