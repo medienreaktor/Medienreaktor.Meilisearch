@@ -45,7 +45,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function sortDesc(string $propertyName): QueryBuilderInterface
     {
-        $this->parameters['sort'] = [$propertyName . ':desc'];
+        $this->parameters['sort'][] = $propertyName . ':desc';
         return $this;
     }
 
@@ -57,7 +57,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function sortAsc(string $propertyName): QueryBuilderInterface
     {
-        $this->parameters['sort'] = [$propertyName . ':asc'];
+        $this->parameters['sort'][] = $propertyName . ':asc';
         return $this;
     }
 
