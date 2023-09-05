@@ -168,7 +168,7 @@ The search query builder supports the following features:
 
 If you want to build your frontend with JavaScript, React or Vue, you can completely ignore above Neos and Fusion integration and use `instant-meilisearch`. 
 
-Please mind these two things:
+Please mind these three things:
 
 ### 1. Filtering for node context and dimensions
 
@@ -197,6 +197,30 @@ The public URI to the node is in the `__uri` attribute of each Meilisearch resul
 It is generated at indexing time and one reason we create separate index records for each node variant, even if they are redundant due to dimension fallback behaviour. This is in contrast to Flowpack.ElasticSearch.ContentRepositoryAdaptor, where only one record is created and multiple dimensions hashes are assigned.
 
 For the URI generation to work, it is important to have a primary domain assigned to each of your sites.
+
+### 3. Image URIs
+
+If you need image URIs in your frontend, this can also be configured. First, make sure to set a base URL in your `Settings.yaml`:
+
+```
+Neos:
+  Flow:
+    http:
+      baseUri: https://example.com/
+```
+
+Then, either configure your specific properties or all image properties to be indexed:
+
+```
+Neos:
+  ContentRepository:
+    Search:
+      defaultConfigurationPerType:
+        Neos\Media\Domain\Model\ImageInterface:
+          indexing: '${AssetUri.build(value, 600, 400)}'
+```
+
+You can set your desired `width`, `height` and optional `allowCropping` values in the method arguments.
 
 ## 👩‍💻 Credits
 
