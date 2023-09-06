@@ -324,6 +324,33 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
+     * Filter by geo radius.
+     *
+     * @param string $lat latitude
+     * @param string $lng longitude
+     * @param string $distance distance in meters
+     * @return QueryBuilderInterface
+     */
+    public function geoRadius(string $lat, string $lng, string $distance): QueryBuilderInterface
+    {
+        $this->parameters['filter'][] = '_geoRadius(' . $lat . ', ' . $lng . ', ' . $distance . ')';
+        return $this;
+    }
+
+    /**
+     * Sort by geo point.
+     *
+     * @param string $lat latitude
+     * @param string $lng longitude
+     * @return QueryBuilderInterface
+     */
+    public function geoPoint(string $lat, string $lng): QueryBuilderInterface
+    {
+        $this->parameters['sort'][] = '_geoPoint(' . $lat . ', ' . $lng . '):asc';
+        return $this;
+    }
+
+    /**
      * @param string $methodName
      * @return boolean
      */

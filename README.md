@@ -13,6 +13,7 @@ This package aims for simplicity and minimal dependencies. It might therefore no
 * ✅ Querying the index via Search-/Eel-Helpers and QueryBuilder
 * ✅ Frontend search form, result rendering and pagination
 * ✅ Faceting and snippet highlighting
+* ✅ Geosearch filtering and sorting
 * 🔴 No asset indexing (yet)
 * 🔴 No autocomplete / autosuggest (this is currently not supported by Meilisearch)
 
@@ -63,7 +64,9 @@ Medienreaktor:
         - '_hiddenBeforeDateTime'
         - '_hiddenAfterDateTime'
         - '_hiddenInIndex'
-      sortableAttributes: []
+        - '_geo'
+      sortableAttributes:
+        - '_geo'
       rankingRules:
         - 'words'
         - 'typo'
@@ -160,7 +163,9 @@ The search query builder supports the following features:
 | `facets(array)`                              | Return facet distribution for given facets, e.g. `facets(['__type', '__parentPath'])` |
 | `highlight(properties, highlightTags)`       | Highlight search results for given properties, e.g. `highlight(['__fulltext.text'])`, highlighted with given tags (optional, default: `['<em'>, '</em>']`) |
 | `crop(cropLength, cropMarker)`               | Sets the highlighting snippets length in words and the crop marker (optional, default: `'…'`) |
-| `matchingStrategy(value)`                    | Sets the matching strategy `'last'` or `'all'`, (default: `'last'`)
+| `matchingStrategy(value)`                    | Sets the matching strategy `'last'` or `'all'`, (default: `'last'`) |
+| `geoRadius(lat, lng, distance)`              | Filters by geo radius |
+| `geoPoint(lat, lng)`                         | Sort by geo point |
 | `execute()`                                  | Execute the query and return resulting nodes |
 | `executeRaw()`                               | Execute the query and return raw Meilisearch result data, enriched with node data |
 
@@ -221,6 +226,28 @@ Neos:
 ```
 
 You can set your desired `width`, `height` and optional `allowCropping` values in the method arguments.
+
+## 📍 Geosearch
+
+Meilisearch supports filtering and sorting on geographic location. For this feature to work, your nodes should supply the `_geo` property with an object of `lat`/`lng` values. An easy way to achieve this is to use a proxy property:
+
+```
+'Neos.Neos:Document':
+  properties:
+    latitude:
+      type: 'string'
+      ui:
+        label: 'Latitude'
+    longitude:
+      type: 'string'
+      ui:
+        label: 'Longitude'
+    _geo:
+      search:
+        indexing: "${{lat: node.properties.latitude, lng: node.properties.longitude}}"
+```
+
+The search query builder supports filtering with `geoRadius()` and sorting with `geoPoint()` (see above).
 
 ## 👩‍💻 Credits
 

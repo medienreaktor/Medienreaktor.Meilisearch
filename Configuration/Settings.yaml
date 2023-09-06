@@ -38,3 +38,6 @@ Medienreaktor:
         - '_hiddenBeforeDateTime'
         - '_hiddenAfterDateTime'
         - '_hiddenInIndex'
+        - '_geo'
+      sortableAttributes:
+        - '_geo'
