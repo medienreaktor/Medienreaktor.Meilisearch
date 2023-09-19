@@ -1,7 +1,7 @@
 # Medienreaktor.Meilisearch
 
 Integrates Meilisearch into Neos. 
-**Compatibility tested with Meilisearch 1.2 and 1.3.**
+**Compatibility tested with Meilisearch 1.3.**
 
 This package aims for simplicity and minimal dependencies. It might therefore not be as sophisticated and extensible as packages like [Flowpack.ElasticSearch.ContentRepositoryAdaptor](https://github.com/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor), and to achieve this, some code parts had to be copied from these great packages (see Credits).
 
@@ -14,6 +14,7 @@ This package aims for simplicity and minimal dependencies. It might therefore no
 * ✅ Frontend search form, result rendering and pagination
 * ✅ Faceting and snippet highlighting
 * ✅ Geosearch filtering and sorting
+* ✅ Vector Search for semantic search / AI search
 * 🔴 No asset indexing (yet)
 * 🔴 No autocomplete / autosuggest (this is currently not supported by Meilisearch)
 
@@ -148,6 +149,7 @@ The search query builder supports the following features:
 | `query(context)`                             | Sets the starting point for this query, e.g. `query(site)` |
 | `nodeType(nodeTypeName)`                     | Filters by the given NodeType, e.g. `nodeType('Neos.Neos:Document')` |
 | `fulltext(searchTerm)`                       | Performs a fulltext search |
+| `vector(vector)`                             | Performs a vector search (see below) |
 | `filter(filterString)`                       | Filters by given filter string, e.g. `filter('__nodeTypeAndSupertypes = "Neos.Neos:Document"')` (see [Meilisearch Documentation](https://www.meilisearch.com/docs/reference/api/search#filter))  |
 | `exactMatch(propertyName, value)`            | Filters by a node property |
 | `exactMatchMultiple(properties)`             | Filters by multiple node properties, e.g. `exactMatchMultiple(['author' => 'foo', 'date' => 'bar'])` |
@@ -248,6 +250,33 @@ Meilisearch supports filtering and sorting on geographic location. For this feat
 ```
 
 The search query builder supports filtering with `geoRadius()` and sorting with `geoPoint()` (see above).
+
+## 📐 Vector Search
+
+You can use Meilisearch as a vector store with the experimental Vector Search feature. Activate it using the `/experimental-features` endpoint as [described in the release notes](https://github.com/meilisearch/meilisearch/releases/tag/v1.3.0).
+
+Vectors for each document have to be provided by you and indexed in the `_vector`-property of your node. This can be done writing a custom Eel-helper that computes the vectors using a third-party tool like [OpenAI](https://openai.com) or [Hugging Face](https://huggingface.co).
+
+```
+'Neos.Neos:Document':
+  properties:
+    _vector:
+      search:
+        indexing: "${VectorIndexing.computeByNode(node)}"
+```
+
+The search query builder supports querying by vectors. Depending on your use case, vectors have to be computed again for the search phrase, e.g.:
+
+    prototype(Medienreaktor.Meilisearch:Search) < prototype(Neos.Neos:ContentComponent) {
+        searchTerm = ${String.toString(request.arguments.search)}
+        searchVector = ${VectorIndexing.computeByString(this.searchTerm)}
+
+        vectorSearchQuery = ${this.searchVector ? Search.query(site).vector(this.searchVector) : null}
+
+        searchResults = ${this.vectorSearchQuery.execute()}
+    }
+
+To show similar documents to your current document (e.g. for Wikis, Knowledge Bases or News Rooms), use the current document's vector as search vector.
 
 ## 👩‍💻 Credits
 

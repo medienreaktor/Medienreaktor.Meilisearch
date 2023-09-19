@@ -162,6 +162,18 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
+     * Query the search index using vectors
+     *
+     * @param array $vector
+     * @return QueryBuilderInterface
+     */
+    public function vector(array $vector): QueryBuilderInterface
+    {
+        $this->parameters['vector'] = $vector;
+        return $this;
+    }
+
+    /**
      * Select attributes to highlight
      *
      * @param array $attributes
