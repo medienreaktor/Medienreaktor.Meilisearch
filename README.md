@@ -231,7 +231,7 @@ You can set your desired `width`, `height` and optional `allowCropping` values i
 
 ## 📍 Geosearch
 
-Meilisearch supports filtering and sorting on geographic location. For this feature to work, your nodes should supply the `_geo` property with an object of `lat`/`lng` values. An easy way to achieve this is to use a proxy property:
+Meilisearch supports filtering and sorting on geographic location. For this feature to work, your nodes should supply the `__geo` property with an object of `lat`/`lng` values. An easy way to achieve this is to use a proxy property:
 
 ```
 'Neos.Neos:Document':
@@ -244,7 +244,7 @@ Meilisearch supports filtering and sorting on geographic location. For this feat
       type: 'string'
       ui:
         label: 'Longitude'
-    _geo:
+    __geo:
       search:
         indexing: "${{lat: node.properties.latitude, lng: node.properties.longitude}}"
 ```

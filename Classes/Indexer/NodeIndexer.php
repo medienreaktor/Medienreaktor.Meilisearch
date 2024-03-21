@@ -164,6 +164,11 @@ class NodeIndexer extends AbstractNodeIndexer
                 $document['__uri'] = $uri;
             }
 
+            if (array_key_exists('__geo', $document)) {
+                $document['_geo'] = $document['__geo'];
+                unset($document['__geo']);
+            }
+
             return $document;
         }
 
