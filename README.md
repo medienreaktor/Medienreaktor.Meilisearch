@@ -227,7 +227,7 @@ Neos:
           indexing: '${AssetUri.build(value, 600, 400)}'
 ```
 
-You can set your desired `width`, `height` and optional `allowCropping` values in the method arguments.
+You can set your desired `width`, `height` and optional `allowCropping`, `allowUpScaling` and `format` values in the method arguments.
 
 ## 📍 Geosearch
 
