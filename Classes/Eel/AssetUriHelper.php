@@ -36,12 +36,14 @@ class AssetUriHelper implements ProtectedContextAwareInterface
      * @param integer $width
      * @param integer $height
      * @param boolean $allowCropping
+     * @param boolean $allowUpScaling
+     * @param string $format
      * @return null|string
      */
-    public function build($value, $width, $height, $allowCropping = true)
+    public function build($value, $width, $height, $allowCropping = true, $allowUpScaling = true, $format = null)
     {
         if ($value instanceof AssetInterface) {
-            $thumbnailConfiguration = new ThumbnailConfiguration($width, $width, $height, $height, $allowCropping);
+            $thumbnailConfiguration = new ThumbnailConfiguration($width, $width, $height, $height, $allowCropping, $allowUpScaling, format: $format);
             $thumbnailData = $this->assetService->getThumbnailUriAndSizeForAsset($value, $thumbnailConfiguration);
             if ($thumbnailData === null) {
                 return null;
