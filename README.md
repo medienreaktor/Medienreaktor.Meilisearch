@@ -1,7 +1,7 @@
 # Medienreaktor.Meilisearch
 
 Integrates Meilisearch into Neos. 
-**Compatibility tested with Meilisearch 1.3.**
+**Compatibility tested with Meilisearch versions 1.2 to 1.8.**
 
 This package aims for simplicity and minimal dependencies. It might therefore not be as sophisticated and extensible as packages like [Flowpack.ElasticSearch.ContentRepositoryAdaptor](https://github.com/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor), and to achieve this, some code parts had to be copied from these great packages (see Credits).
 
