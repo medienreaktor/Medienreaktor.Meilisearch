@@ -75,6 +75,9 @@
       isRoot: true
       enable: true
   properties:
+    _hiddenInIndex:
+      search:
+        indexing: "${node.hiddenInIndex}"
     title:
       search:
         fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.title)}"
