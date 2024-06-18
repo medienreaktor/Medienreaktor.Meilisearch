@@ -51,33 +51,15 @@
       search:
         indexing: "${(node.hiddenAfterDateTime ? Date.format(node.hiddenAfterDateTime, 'U') : null)}"
 
-'Neos.NodeTypes:Text':
-  search:
-    fulltext:
-      enable: true
-  properties:
-    text:
-      search:
-        fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.text)}"
-
-'Neos.NodeTypes:Headline':
-  search:
-    fulltext:
-      enable: true
-  properties:
-    title:
-      search:
-        fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.title)}"
-
 'Neos.Neos:Document':
   search:
     fulltext:
       isRoot: true
       enable: true
   properties:
-    _hiddenInIndex:
+    '_hiddenInIndex':
       search:
         indexing: "${node.hiddenInIndex}"
-    title:
+    'title':
       search:
         fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.title)}"

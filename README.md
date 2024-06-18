@@ -105,9 +105,18 @@ Properties of Content NodeTypes that should be included in fulltext search must 
     fulltext:
       enable: true
   properties:
-    text:
+    'text':
       search:
         fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.text)}"
+
+'Neos.NodeTypes:Headline':
+  search:
+    fulltext:
+      enable: true
+  properties:
+    'title':
+      search:
+        fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.title)}"
 ```
 
 You will see that some properties are indexed twice, like `_path` and `__path`, `_nodeType` and `__nodeType`. This is due to the different _privacy_ of these node properties:
