@@ -3,9 +3,12 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Eel;
 
-use Neos\Flow\Annotations as Flow;
+use Medienreaktor\Meilisearch\Domain\Service\RequestService;
 use Neos\Eel\ProtectedContextAwareInterface;
+use Neos\Flow\Annotations as Flow;
+use Neos\Flow\Mvc\Routing\UriBuilder;
 use Neos\Media\Domain\Model\AssetInterface;
+use Neos\Media\Domain\Model\Thumbnail;
 use Neos\Media\Domain\Model\ThumbnailConfiguration;
 use Neos\Media\Domain\Service\AssetService;
 use Neos\Media\Domain\Service\ThumbnailService;
@@ -30,6 +33,24 @@ class AssetUriHelper implements ProtectedContextAwareInterface
     protected $thumbnailService;
 
     /**
+     * @Flow\Inject
+     * @var UriBuilder
+     */
+    protected $uriBuilder;
+
+    /**
+    * @Flow\Inject
+    * @var RequestService
+    */
+    protected $requestService;
+
+    /**
+     * @var string
+     * @Flow\InjectConfiguration(path="http.baseUri", package="Neos.Flow")
+     */
+    protected $baseUri;
+
+    /**
      * Build asset uri
      *
      * @param AssetInterface|AssetInterface[]|null $value
@@ -42,16 +63,33 @@ class AssetUriHelper implements ProtectedContextAwareInterface
      */
     public function build($value, $width, $height, $allowCropping = true, $allowUpScaling = true, $format = null)
     {
-        if ($value instanceof AssetInterface) {
-            $thumbnailConfiguration = new ThumbnailConfiguration($width, $width, $height, $height, $allowCropping, $allowUpScaling, format: $format);
-            $thumbnailData = $this->assetService->getThumbnailUriAndSizeForAsset($value, $thumbnailConfiguration);
-            if ($thumbnailData === null) {
-                return null;
-            }
-            return $thumbnailData['src'];
+        if (!$value instanceof AssetInterface) {
+            return null;
         }
 
-        return null;
+        // If no baseUri is set, we create async thumbnails
+        $async = !$this->baseUri;
+        $thumbnailConfiguration = new ThumbnailConfiguration($width, $width, $height, $height, $allowCropping, $allowUpScaling, $async, format: $format);
+
+        if ($async) {
+            $thumbnailImage = $this->thumbnailService->getThumbnail($value, $thumbnailConfiguration);
+            if ($thumbnailImage instanceof Thumbnail) {
+                $request = $this->requestService->createActionRequest();
+                $this->uriBuilder->setRequest($request->getMainRequest());
+                $uri = $this->uriBuilder
+                        ->reset()
+                        ->setCreateAbsoluteUri(false)
+                        ->uriFor('thumbnail', ['thumbnail' => $thumbnailImage], 'Thumbnail', 'Neos.Media');
+                return $uri ?: null;
+            }
+            return null;
+        }
+
+        $thumbnailData = $this->assetService->getThumbnailUriAndSizeForAsset($value, $thumbnailConfiguration);
+        if ($thumbnailData === null) {
+            return null;
+        }
+        return $thumbnailData['src'];
     }
 
     /**
