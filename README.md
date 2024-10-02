@@ -1,6 +1,6 @@
 # Medienreaktor.Meilisearch
 
-Integrates Meilisearch into Neos. 
+Integrates Meilisearch into Neos.
 **Compatibility tested with Meilisearch versions 1.2 to 1.8.**
 
 This package aims for simplicity and minimal dependencies. It might therefore not be as sophisticated and extensible as packages like [Flowpack.ElasticSearch.ContentRepositoryAdaptor](https://github.com/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor), and to achieve this, some code parts had to be copied from these great packages (see Credits).
@@ -85,7 +85,7 @@ Medienreaktor:
         maxValuesPerFacet: 100
 ```
 
-Please do not remove, only extend, above `filterableAttributes`, as they are needed for base functionality to work. After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`. 
+Please do not remove, only extend, above `filterableAttributes`, as they are needed for base functionality to work. After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`.
 
 Document NodeTypes should be configured as fulltext root (this comes by default for all `Neos.Neos:Document` subtypes):
 
@@ -182,7 +182,7 @@ The search query builder supports the following features:
 
 ## ⚡ Usage with JavaScript / React / Vue
 
-If you want to build your frontend with JavaScript, React or Vue, you can completely ignore above Neos and Fusion integration and use `instant-meilisearch`. 
+If you want to build your frontend with JavaScript, React or Vue, you can completely ignore above Neos and Fusion integration and use `instant-meilisearch`.
 
 Please mind these three things:
 
@@ -208,26 +208,19 @@ dimensionsHash = ${String.md5(Json.stringify(site.context.dimensions))}
 
 ### 2. The node URI
 
-The public URI to the node is in the `__uri` attribute of each Meilisearch result hit. 
+The public URI to the node is in the `__uri` attribute of each Meilisearch result hit.
 
 It is generated at indexing time and one reason we create separate index records for each node variant, even if they are redundant due to dimension fallback behaviour. This is in contrast to Flowpack.ElasticSearch.ContentRepositoryAdaptor, where only one record is created and multiple dimensions hashes are assigned.
 
-For the URI generation to work, it is important to have a primary domain assigned to each of your sites.
+If you have assigned a primary domain to your site, the URI will be absolute, otherwise relative.
 
 ### 3. Image URIs
 
-If you need image URIs in your frontend, this can also be configured. First, make sure to set a base URL in your `Settings.yaml`:
+If you need image URIs in your frontend, this can also be configured.
 
-```
-Neos:
-  Flow:
-    http:
-      baseUri: https://example.com/
-```
+Configure your specific properties or all image properties to be indexed:
 
-Then, either configure your specific properties or all image properties to be indexed:
-
-```
+```yaml
 Neos:
   ContentRepository:
     Search:
@@ -237,6 +230,20 @@ Neos:
 ```
 
 You can set your desired `width`, `height` and optional `allowCropping`, `allowUpScaling` and `format` values in the method arguments.
+
+If you have set the `baseUri` in your `Settings.yaml`, the path to your image will be absolute and not asynchron.
+(e.g. `https://example.com/_Resources/Persistent/1/2/3/4/1234567890n/filename-800x600.jpg`)
+
+Otherwise, the image paths will be relative and asynchron (e.g. `/media/thumbnail/12345678-1234-1234-1234-1234567890`)
+
+To set the `baseUri` add your URI to your `Settings.yaml`:
+
+```yaml
+Neos:
+  Flow:
+    http:
+      baseUri: https://example.com/
+```
 
 ## 📍 Geosearch
 
