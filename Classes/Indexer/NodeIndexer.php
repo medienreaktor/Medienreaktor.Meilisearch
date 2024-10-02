@@ -4,27 +4,15 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Indexer;
 
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
+use Medienreaktor\Meilisearch\Domain\Service\NodeLinkService;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraints;
 use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraintFactory;
+use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraints;
 use Neos\ContentRepository\Domain\Service\ContentDimensionPresetSourceInterface;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
-use Neos\ContentRepository\Domain\Service\Context;
 use Neos\ContentRepository\Exception\NodeException;
 use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
 use Neos\Flow\Annotations as Flow;
-use Neos\Flow\Http\ServerRequestAttributes;
-use Neos\Flow\Mvc\ActionRequest;
-use Neos\Flow\Mvc\Controller\ControllerContext;
-use Neos\Flow\Mvc;
-use Neos\Flow\Mvc\Routing\Dto\RouteParameters;
-use Neos\Flow\Mvc\Routing\UriBuilder;
-use Neos\Neos\Domain\Model\Site;
-use Neos\Neos\Domain\Repository\SiteRepository;
-use Neos\Neos\Service\LinkingService;
-use Psr\Http\Message\ServerRequestFactoryInterface;
-use Psr\Http\Message\ServerRequestInterface;
-use Psr\Http\Message\UriFactoryInterface;
 
 /**
  * Indexer for Content Repository Nodes.
@@ -38,6 +26,12 @@ class NodeIndexer extends AbstractNodeIndexer
      * @var IndexInterface
      */
     protected $indexClient;
+
+    /**
+     * @Flow\Inject
+     * @var NodeLinkService
+     */
+    protected $nodeLinkService;
 
     /**
      * @Flow\Inject
@@ -56,30 +50,6 @@ class NodeIndexer extends AbstractNodeIndexer
      * @var ContextFactoryInterface
      */
     protected $contextFactory;
-
-    /**
-     * @Flow\Inject
-     * @var ServerRequestFactoryInterface
-     */
-    protected $requestFactory;
-
-    /**
-     * @Flow\Inject
-     * @var UriFactoryInterface
-     */
-    protected $uriFactory;
-
-    /**
-	 * @Flow\Inject
-	 * @var LinkingService
-	 */
-    protected $linkingService;
-
-    /**
-     * @Flow\Inject
-     * @var SiteRepository
-     */
-    protected $siteRepository;
 
     public function initializeObject($cause)
     {
@@ -160,7 +130,7 @@ class NodeIndexer extends AbstractNodeIndexer
             $document['id'] = $identifier;
             $document['__fulltext'] = $fulltext;
 
-            if ($uri = $this->getNodeUri($node, $context)) {
+            if ($uri = $this->nodeLinkService->getNodeUri($node, $context)) {
                 $document['__uri'] = $uri;
             }
 
@@ -193,68 +163,6 @@ class NodeIndexer extends AbstractNodeIndexer
     public function flush(): void
     {
         return;
-    }
-
-    /**
-     * Get the node uri
-     *
-     * @param NodeInterface $node
-     * @param Context $context
-     * @return string
-     */
-    protected function getNodeUri(NodeInterface $node, Context $context): ?string
-    {
-        try {
-            $nodePath = $node->getPath();
-            $nodePathSegments = explode('/', $nodePath);
-
-            // Seems hacky, but we need to get the site by the node name here
-            // and extract the site name by the node's path
-            if (count($nodePathSegments) >= 3) {
-                $siteName = $nodePathSegments[2];
-                $site = $this->siteRepository->findOneByNodeName($siteName);
-
-                $controllerContext = $this->getControllerContext($site);
-                if ($controllerContext) {
-                    return $this->linkingService->createNodeUri($controllerContext, $node, $context->getCurrentSiteNode(), 'html', TRUE);
-                }
-            }
-        } catch (\Exception $e) {
-
-        }
-        return null;
-    }
-
-    /**
-     * Get the controller context
-     *
-     * @param Site $site
-     * @return ControllerContext
-     */
-    protected function getControllerContext(Site $site): ?ControllerContext
-    {
-        if ($site && $site->isOnline()) {
-            $domain = $site->getPrimaryDomain();
-
-            if ($domain && $domain->getActive()) {
-                $requestUri = $this->uriFactory->createUri($domain->__toString());
-                $httpRequest = $this->requestFactory->createServerRequest('get', $requestUri);
-                $parameters = $httpRequest->getAttribute(ServerRequestAttributes::ROUTING_PARAMETERS) ?? RouteParameters::createEmpty();
-                $httpRequest = $httpRequest->withAttribute(ServerRequestAttributes::ROUTING_PARAMETERS, $parameters->withParameter('requestUriHost', $requestUri->getHost()));
-
-                $actionRequest = ActionRequest::fromHttpRequest($httpRequest);
-                $actionRequest->setFormat('html');
-
-                $uriBuilder = new UriBuilder();
-                $uriBuilder->setRequest($actionRequest);
-                $uriBuilder->setCreateAbsoluteUri(true);
-
-                $controllerContext = new ControllerContext($actionRequest, new Mvc\ActionResponse(), new Mvc\Controller\Arguments([]), $uriBuilder);
-                return $controllerContext;
-            }
-        }
-
-        return null;
     }
 
     /**
