@@ -16,7 +16,7 @@ prototype(Medienreaktor.Meilisearch:Component.Pagination) < prototype(Neos.Fusio
                 class = ${page == props.page ? 'active' : ''}
                 href = Neos.Neos:NodeUri {
                     node = ${documentNode}
-                    additionalParams = Neos.Fusion:RawArray {
+                    additionalParams = Neos.Fusion:DataStructure {
                         search = ${props.searchTerm}
                         page = ${page}
                         filterBy = ${props.filterBy}

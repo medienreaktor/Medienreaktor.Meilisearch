@@ -2,5 +2,5 @@
   superTypes:
     'Neos.Neos:Content': true
   ui:
-    label: 'Search'
-    icon: 'icon-search'
+    label: Search
+    icon: icon-search

@@ -33,16 +33,18 @@ class NodeLinkService
     /**
      * Get the node uri
      *
-     * @param NodeInterface $node
-     * @param Context|null $context
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node
+     * @param \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub|null $context
      * @return string|null
      */
-    public function getNodeUri(NodeInterface $node, ?Context $context = null): ?string
+    public function getNodeUri(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node, ?\Neos\Rector\ContentRepository90\Legacy\LegacyContextStub $context = null): ?string
     {
-        if ($context instanceof Context) {
+        if ($context instanceof \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub) {
+            // TODO 9.0 migration: !! ContentContext::getCurrentSiteNode() is removed in Neos 9.0. Use Subgraph and traverse up to "Neos.Neos:Site" node.
+
             $siteNode = $context->getCurrentSiteNode();
         }
-        if (!$siteNode instanceof NodeInterface) {
+        if (!$siteNode instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node) {
             $siteNode = $this->getSiteNodeFromNode($node);
         }
         $domain = $this->requestService->getDomain($siteNode);
@@ -58,10 +60,10 @@ class NodeLinkService
     /**
      * Get the site node from a node
      *
-     * @param NodeInterface $node
-     * @return NodeInterface
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node
+     * @return \Neos\ContentRepository\Core\Projection\ContentGraph\Node
      */
-    public function getSiteNodeFromNode(NodeInterface $node): NodeInterface
+    public function getSiteNodeFromNode(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node): \Neos\ContentRepository\Core\Projection\ContentGraph\Node
     {
         $flowQuery = new FlowQuery([$node]);
         $nodes = $flowQuery->parents('[instanceof Neos.Neos:Document]')->get();

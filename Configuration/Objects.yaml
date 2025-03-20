@@ -1,9 +1,7 @@
 Neos\ContentRepository\Search\Search\QueryBuilderInterface:
-  className: 'Medienreaktor\Meilisearch\Search\MeilisearchQueryBuilder'
-
+  className: Medienreaktor\Meilisearch\Search\MeilisearchQueryBuilder
 Neos\ContentRepository\Search\Indexer\NodeIndexerInterface:
-  className: 'Medienreaktor\Meilisearch\Indexer\NodeIndexer'
-
+  className: Medienreaktor\Meilisearch\Indexer\NodeIndexer
 Medienreaktor\Meilisearch\Indexer\NodeIndexer:
   properties:
     indexClient:
@@ -12,8 +10,7 @@ Medienreaktor\Meilisearch\Indexer\NodeIndexer:
         factoryMethodName: create
         arguments:
           1:
-            value: 'neos'
-
+            value: neos
 Medienreaktor\Meilisearch\Command\NodeIndexCommandController:
   properties:
     indexClient:
@@ -22,8 +19,7 @@ Medienreaktor\Meilisearch\Command\NodeIndexCommandController:
         factoryMethodName: create
         arguments:
           1:
-            value: 'neos'
-
+            value: neos
 Medienreaktor\Meilisearch\Search\MeilisearchQueryBuilder:
   properties:
     indexClient:
@@ -32,4 +28,4 @@ Medienreaktor\Meilisearch\Search\MeilisearchQueryBuilder:
         factoryMethodName: create
         arguments:
           1:
-            value: 'neos'
+            value: neos

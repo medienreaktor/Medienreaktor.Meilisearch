@@ -23,7 +23,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     /**
      * The node inside which searching should happen
      *
-     * @var NodeInterface
+     * @var \Neos\ContentRepository\Core\Projection\ContentGraph\Node
      */
     protected $contextNode;
 
@@ -219,7 +219,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     /**
      * Execute the query and return the list of nodes as result
      *
-     * @return \Traversable<\Neos\ContentRepository\Domain\Model\NodeInterface>
+     * @return \Traversable<\Neos\ContentRepository\Core\Projection\ContentGraph\Node>
      */
     public function execute(): \Traversable
     {
@@ -229,8 +229,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
         foreach ($results->getHits() as $hit) {
             $nodePath = $hit['__path'];
             $node = $this->contextNode->getNode($nodePath);
-            if ($node instanceof NodeInterface) {
-                $nodes[(string) $node->getNodeAggregateIdentifier()] = $node;
+            if ($node instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node) {
+                $nodes[(string) $node->nodeAggregateId] = $node;
             }
         }
         return (new \ArrayObject(array_values($nodes)))->getIterator();
@@ -239,7 +239,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     /**
      * Execute the query and return the raw results enriched with node information
      *
-     * @return \Traversable<\Neos\ContentRepository\Domain\Model\NodeInterface>
+     * @return \Traversable<\Neos\ContentRepository\Core\Projection\ContentGraph\Node>
      */
     public function executeRaw(): \Traversable
     {
@@ -249,9 +249,9 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
         foreach ($results->getHits() as $hit) {
             $nodePath = $hit['__path'];
             $node = $this->contextNode->getNode($nodePath);
-            if ($node instanceof NodeInterface) {
+            if ($node instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node) {
                 $hit['__node'] = $node;
-                $hits[(string) $node->getNodeAggregateIdentifier()] = $hit;
+                $hits[(string) $node->nodeAggregateId] = $hit;
             }
         }
         return (new \ArrayObject(array_values($hits)))->getIterator();
@@ -308,10 +308,10 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * Sets the starting point for this query. Search result should only contain nodes that
      * match the context of the given node and have it as parent node in their rootline.
      *
-     * @param NodeInterface $contextNode
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $contextNode
      * @return QueryBuilderInterface
      */
-    public function query(NodeInterface $contextNode): QueryBuilderInterface
+    public function query(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $contextNode): QueryBuilderInterface
     {
         $this->contextNode = $contextNode;
         $nodePath = (string) $contextNode->findNodePath();

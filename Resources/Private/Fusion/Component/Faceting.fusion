@@ -5,7 +5,7 @@ prototype(Medienreaktor.Meilisearch:Component.Faceting) < prototype(Neos.Fusion:
 
     resetLink = Neos.Neos:NodeUri {
         node = ${documentNode}
-        additionalParams = Neos.Fusion:RawArray {
+        additionalParams = Neos.Fusion:DataStructure {
             search = ${props.searchTerm}
         }
     }

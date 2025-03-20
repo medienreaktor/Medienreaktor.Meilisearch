@@ -7,37 +7,37 @@ Neos:
     Search:
       defaultConfigurationPerType:
         references:
-          indexing: "${Indexing.convertArrayOfNodesToArrayOfNodeIdentifiers(value)}"
+          indexing: '${Indexing.convertArrayOfNodesToArrayOfNodeIdentifiers(value)}'
       defaultContext:
         Json: Neos\Eel\Helper\JsonHelper
         AssetUri: Medienreaktor\Meilisearch\Eel\AssetUriHelper
 Medienreaktor:
   Meilisearch:
     client:
-      endpoint: ''
-      apiKey: ''
+      endpoint: 'http://10.0.1.121:51810'
+      apiKey: '1234'
     settings:
       displayedAttributes:
         - '*'
       searchableAttributes:
-        - '__fulltext.text'
-        - '__fulltext.h1'
-        - '__fulltext.h2'
-        - '__fulltext.h3'
-        - '__fulltext.h4'
-        - '__fulltext.h5'
-        - '__fulltext.h6'
+        - __fulltext.text
+        - __fulltext.h1
+        - __fulltext.h2
+        - __fulltext.h3
+        - __fulltext.h4
+        - __fulltext.h5
+        - __fulltext.h6
       filterableAttributes:
-        - '__identifier'
-        - '__dimensionsHash'
-        - '__path'
-        - '__parentPath'
-        - '__nodeType'
-        - '__nodeTypeAndSupertypes'
-        - '_hidden'
-        - '_hiddenBeforeDateTime'
-        - '_hiddenAfterDateTime'
-        - '_hiddenInIndex'
-        - '_geo'
+        - __identifier
+        - __dimensionsHash
+        - __path
+        - __parentPath
+        - __nodeType
+        - __nodeTypeAndSupertypes
+        - _hidden
+        - _hiddenBeforeDateTime
+        - _hiddenAfterDateTime
+        - _hiddenInIndex
+        - _geo
       sortableAttributes:
-        - '_geo'
+        - _geo
