@@ -6,14 +6,15 @@ namespace Medienreaktor\Meilisearch\Command;
 use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Exception;
+use Medienreaktor\Meilisearch\Indexer\WorkspaceIndexer;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\NodeType\NodeTypeName;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\ContentRepository\Core\Projection\ContentGraph\NodeAggregate;
 use Neos\ContentRepository\Core\Projection\ContentGraph\VisibilityConstraints;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
-use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Search\Exception\IndexingException;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
@@ -32,6 +33,11 @@ class NodeIndexCommandController extends CommandController {
      * @var NodeIndexer
      */
     protected $nodeIndexer;
+    /**
+     * @Flow\Inject
+     * @var WorkspaceIndexer
+     */
+    protected $workspaceIndexer;
 
     /**
      * @Flow\Inject
@@ -56,42 +62,16 @@ class NodeIndexCommandController extends CommandController {
     public function buildCommand(): void {
         $this->indexClient->createIndex();
 
-        $context = new \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub(['workspaceName' => 'live']);
-        // TODO 9.0 migration: !! MEGA DIRTY CODE! Ensure to rewrite this; by getting rid of LegacyContextStub.
-        $contentRepository = $this->contentRepositoryRegistry->get(ContentRepositoryId::fromString('default'));
+        $contentRepositoryId = ContentRepositoryId::fromString('default');
+        $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $workspace = $contentRepository->findWorkspaceByName(WorkspaceName::forLive());
-        $rootNodeAggregate = $contentRepository->getContentGraph($workspace->workspaceName)->findRootNodeAggregateByType(NodeTypeName::fromString('Neos.Neos:Sites'));
-        $subgraph = $contentRepository->getContentGraph($workspace->workspaceName)->
-        getSubgraph(DimensionSpacePoint::fromLegacyDimensionArray($context->dimensions ?? []),
-            VisibilityConstraints::default());
-        $rootNode = $subgraph->findNodeById($rootNodeAggregate->nodeAggregateId);
-        $this->traverseNodes($rootNode);
+
+        $contentGraph = $contentRepository->getContentGraph($workspace->workspaceName);
+        $rootNodeAggregate = $contentGraph->findRootNodeAggregateByType(NodeTypeName::fromString('Neos.Neos:Sites'));
+
+        $this->indexedNodes = $this->workspaceIndexer->index($contentRepositoryId, $workspace->workspaceName);
 
         $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes.');
-    }
-
-    /**
-     * @param Node $currentNode
-     * @throws Exception
-     */
-    protected function traverseNodes(Node $currentNode): void {
-        if ($this->isFulltextRoot($currentNode)) {
-            try {
-                $this->nodeIndexer->indexNode($currentNode);
-            } catch (NodeException|IndexingException $exception) {
-                throw new Exception(sprintf('Error during indexing of node %s (%s)', $currentNode->findNodePath(), (string)$currentNode->nodeAggregateId), 1690288327, $exception);
-            }
-            $this->indexedNodes++;
-        }
-
-        $contentRepository = $this->contentRepositoryRegistry->get($currentNode->contentRepositoryId);
-        $subgraph = $contentRepository->getContentSubgraph(WorkspaceName::forLive(), $currentNode->dimensionSpacePoint);
-        $filter = FindChildNodesFilter::create();
-        $childNodes = $subgraph->findChildNodes($currentNode->aggregateId, $filter);
-
-        foreach ($childNodes as $childNode) {
-            $this->traverseNodes($childNode);
-        }
     }
 
     /**
@@ -108,7 +88,7 @@ class NodeIndexCommandController extends CommandController {
      * @param Node $node
      * @return bool
      */
-    protected function isFulltextRoot(Node $node): bool {
+    protected function isFulltextRoot(NodeAggregate $node): bool {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
         if ($contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->hasConfiguration('search')) {
             $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);

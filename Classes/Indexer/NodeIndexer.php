@@ -11,13 +11,18 @@ use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePointSet;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\ContentRepository\Core\Projection\ContentGraph\NodeAggregate;
+use Neos\ContentRepository\Core\Projection\ContentGraph\VisibilityConstraints;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeName;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Mvc\ActionRequest;
+use Neos\Neos\Domain\Model\SiteNodeName;
 use Neos\Neos\FrontendRouting\NodeUriBuilderFactory;
+use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
 use Neos\Rector\ContentRepository90\Legacy\LegacyContextStub;
 use Ramsey\Uuid\Exception\NodeException;
 use function RectorPrefix202304\dump;
@@ -95,6 +100,22 @@ class NodeIndexer extends AbstractNodeIndexer {
     }
 
     /**
+     * Add or update a node in the index with all node variants.
+     *
+     * @param Node $node
+     * @param string $targetWorkspace
+     * @return void
+     */
+    public function indexSingleNode(Node $node): void {
+        $node = $this->findFulltextRoot($node);
+        if ($node !== null) {
+            $this->removeNode($node);
+            $nodeVariant = $this->extractNodeVariant($node, $node->dimensionSpacePoint);
+            $this->indexClient->addDocuments([$nodeVariant]);
+        }
+    }
+
+    /**
      * Extract node variant properties and fulltext for a given dimension combination
      *
      * @param string $nodeIdentifier
@@ -104,7 +125,7 @@ class NodeIndexer extends AbstractNodeIndexer {
     protected function extractNodeVariant(Node $node, DimensionSpacePoint $dimensionCombination): array|null {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
 
-        $subgraph = $contentRepository->getContentSubgraph(WorkspaceName::forLive(), $dimensionCombination);
+        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($dimensionCombination, VisibilityConstraints::createEmpty());
         $node = $subgraph->findNodeById($node->aggregateId);
 
 
@@ -115,6 +136,16 @@ class NodeIndexer extends AbstractNodeIndexer {
             $document = $this->extractPropertiesAndFulltext($node, $fulltext);
             $document['id'] = $identifier;
             $document['__fulltext'] = $fulltext;
+            $document['title'] = $node->getProperty("title");
+
+            $httpRequest = new ServerRequest('GET', 'http://localhost');
+            $siteNodeName = SiteNodeName::fromString("site");
+            $httpRequest = (SiteDetectionResult::create($siteNodeName, $node->contentRepositoryId))->storeInRequest($httpRequest);
+            $actionRequest = ActionRequest::fromHttpRequest($httpRequest);
+
+            $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest($actionRequest);
+            $nodeAddress = NodeAddress::fromNode($node);
+//            $uri = $nodeUriBuilder->uriFor($nodeAddress);
 
 //            $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest(ActionRequest::fromHttpRequest(ServerRequest::fromGlobals()));
 //            $nodeAddress = NodeAddress::fromNode($node);
@@ -219,7 +250,7 @@ class NodeIndexer extends AbstractNodeIndexer {
     protected function extractPropertiesAndFulltext(Node|null $node, array &$fulltextData, \Closure $nonIndexedPropertyErrorHandler = null): array {
         $result = parent::extractPropertiesAndFulltext($node, $fulltextData, $nonIndexedPropertyErrorHandler);
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
-        $subgraph = $contentRepository->getContentSubgraph(WorkspaceName::forLive(), $node->dimensionSpacePoint);
+        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($node->dimensionSpacePoint, VisibilityConstraints::createEmpty());
         $filter = FindChildNodesFilter::create(nodeTypes: 'Neos.Neos:Content,Neos.Neos:ContentCollection');
         $childNodes = $subgraph->findChildNodes($node->aggregateId, $filter);
 
@@ -242,7 +273,7 @@ class NodeIndexer extends AbstractNodeIndexer {
                 }
             }
         }
-        $subgraph = $contentRepository->getContentSubgraph(WorkspaceName::forLive(), $node->dimensionSpacePoint);
+        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($node->dimensionSpacePoint, VisibilityConstraints::createEmpty());
         $childNodes = $subgraph->findChildNodes($node->aggregateId, $filter);
 
         foreach ($childNodes as $childNode) {
