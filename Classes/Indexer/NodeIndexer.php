@@ -21,7 +21,9 @@ use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Mvc\ActionRequest;
 use Neos\Neos\Domain\Model\SiteNodeName;
+use Neos\Neos\Domain\Repository\SiteRepository;
 use Neos\Neos\FrontendRouting\NodeUriBuilderFactory;
+use Neos\Neos\FrontendRouting\Options;
 use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
 use Neos\Rector\ContentRepository90\Legacy\LegacyContextStub;
 use Ramsey\Uuid\Exception\NodeException;
@@ -38,6 +40,12 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @var IndexInterface
      */
     protected $indexClient;
+
+    /**
+     * @Flow\Inject
+     * @var SiteRepository
+     */
+    protected $siteRepository;
 
     /**
      * @Flow\Inject
@@ -138,19 +146,18 @@ class NodeIndexer extends AbstractNodeIndexer {
             $document['__fulltext'] = $fulltext;
             $document['title'] = $node->getProperty("title");
 
-            $httpRequest = new ServerRequest('GET', 'http://localhost');
             $siteNodeName = SiteNodeName::fromString("site");
+            $siteNode = $this->siteRepository->findOneByNodeName($siteNodeName);
+            $domain = $siteNode->getDomains()->get(0);
+            $url = $domain->getScheme() . "://" . $domain->getHostname();
+            $httpRequest = new ServerRequest('GET', $url);
             $httpRequest = (SiteDetectionResult::create($siteNodeName, $node->contentRepositoryId))->storeInRequest($httpRequest);
             $actionRequest = ActionRequest::fromHttpRequest($httpRequest);
 
             $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest($actionRequest);
             $nodeAddress = NodeAddress::fromNode($node);
-//            $uri = $nodeUriBuilder->uriFor($nodeAddress);
+            $uri = $nodeUriBuilder->uriFor($nodeAddress, Options::createForceAbsolute());
 
-//            $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest(ActionRequest::fromHttpRequest(ServerRequest::fromGlobals()));
-//            $nodeAddress = NodeAddress::fromNode($node);
-//            $uri = $nodeUriBuilder->uriFor($nodeAddress);
-            $uri = "this should be replaced with the absolute uri of the node";
             $document['__uri'] = $uri;
 
 //            if ($uri = $this->nodeLinkService->getNodeUri($node, $context)) {
