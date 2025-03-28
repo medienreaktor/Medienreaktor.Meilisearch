@@ -6,6 +6,7 @@ namespace Medienreaktor\Meilisearch\Indexer;
 use GuzzleHttp\Psr7\ServerRequest;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Domain\Service\NodeLinkService;
+use Medienreaktor\Meilisearch\Domain\Service\RequestService;
 use Neos\ContentRepository\Core\Dimension\ContentDimensionId;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePointSet;
@@ -49,9 +50,15 @@ class NodeIndexer extends AbstractNodeIndexer {
 
     /**
      * @Flow\Inject
-     * @var NodeUriBuilderFactory
+     * @var NodeLinkService
      */
-    protected $nodeUriBuilderFactory;
+    protected $nodeLinkService;
+
+    /**
+     * @Flow\Inject
+     * @var RequestService
+     */
+    protected $requestService;
 
     #[\Neos\Flow\Annotations\Inject]
     protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
@@ -145,24 +152,8 @@ class NodeIndexer extends AbstractNodeIndexer {
             $document['id'] = $identifier;
             $document['__fulltext'] = $fulltext;
             $document['title'] = $node->getProperty("title");
-
-            $siteNodeName = SiteNodeName::fromString("site");
-            $siteNode = $this->siteRepository->findOneByNodeName($siteNodeName);
-            $domain = $siteNode->getDomains()->get(0);
-            $url = $domain->getScheme() . "://" . $domain->getHostname();
-            $httpRequest = new ServerRequest('GET', $url);
-            $httpRequest = (SiteDetectionResult::create($siteNodeName, $node->contentRepositoryId))->storeInRequest($httpRequest);
-            $actionRequest = ActionRequest::fromHttpRequest($httpRequest);
-
-            $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest($actionRequest);
-            $nodeAddress = NodeAddress::fromNode($node);
-            $uri = $nodeUriBuilder->uriFor($nodeAddress, Options::createForceAbsolute());
-
+            $uri = $this->nodeLinkService->getNodeUri($node);
             $document['__uri'] = $uri;
-
-//            if ($uri = $this->nodeLinkService->getNodeUri($node, $context)) {
-//                $document['__uri'] = $uri;
-//            }
 
             if (array_key_exists('__geo', $document)) {
                 $document['_geo'] = $document['__geo'];
@@ -296,7 +287,7 @@ class NodeIndexer extends AbstractNodeIndexer {
      */
     protected function generateUniqueNodeIdentifier(Node $node): string {
         $nodeIdentifier = (string)$node->aggregateId;
-        $dimensionsHash = md5(json_encode($node->dimensionSpacePoint));
+        $dimensionsHash = md5($node->dimensionSpacePoint->toJson());
 
         return $nodeIdentifier . '_' . $dimensionsHash;
     }

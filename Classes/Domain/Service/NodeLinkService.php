@@ -4,11 +4,16 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Domain\Service;
 
 use Medienreaktor\Meilisearch\Domain\Service\RequestService;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\Flow\Annotations as Flow;
+use Neos\Neos\FrontendRouting\NodeUriBuilderFactory;
+use Neos\Neos\FrontendRouting\Options;
 use Neos\Neos\Service\LinkingService;
 use Neos\Eel\FlowQuery\FlowQuery;
 use Neos\ContentRepository\Domain\Service\Context;
+use Psr\Http\Message\UriInterface;
 
 /**
  * Get links from nodes in the CLI
@@ -17,13 +22,6 @@ use Neos\ContentRepository\Domain\Service\Context;
  */
 class NodeLinkService
 {
-
-     /**
-     * @Flow\Inject
-     * @var LinkingService
-     */
-    protected $linkingService;
-
     /**
     * @Flow\Inject
     * @var RequestService
@@ -31,43 +29,25 @@ class NodeLinkService
     protected $requestService;
 
     /**
-     * Get the node uri
-     *
-     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node
-     * @param \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub|null $context
-     * @return string|null
+     * @Flow\Inject
+     * @var NodeUriBuilderFactory
      */
-    public function getNodeUri(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node, ?\Neos\Rector\ContentRepository90\Legacy\LegacyContextStub $context = null): ?string
-    {
-        if ($context instanceof \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub) {
-            // TODO 9.0 migration: !! ContentContext::getCurrentSiteNode() is removed in Neos 9.0. Use Subgraph and traverse up to "Neos.Neos:Site" node.
+    protected $nodeUriBuilderFactory;
 
-            $siteNode = $context->getCurrentSiteNode();
-        }
-        if (!$siteNode instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node) {
-            $siteNode = $this->getSiteNodeFromNode($node);
-        }
-        $domain = $this->requestService->getDomain($siteNode);
-        $controllerContext = $this->requestService->getControllerContext($domain);
-
-        try {
-            return $this->linkingService->createNodeUri($controllerContext, $node, $siteNode, 'html', !!$domain);
-        } catch (\Exception $e) {
-        }
-        return null;
-    }
 
     /**
-     * Get the site node from a node
+     * Get the node uri
      *
-     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node
-     * @return \Neos\ContentRepository\Core\Projection\ContentGraph\Node
+     * @param Node $node
+     * @return string|null
      */
-    public function getSiteNodeFromNode(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node): \Neos\ContentRepository\Core\Projection\ContentGraph\Node
+    public function getNodeUri(Node $node): ?UriInterface
     {
-        $flowQuery = new FlowQuery([$node]);
-        $nodes = $flowQuery->parents('[instanceof Neos.Neos:Document]')->get();
-
-        return end($nodes);
+        $actionRequest = $this->requestService->createActionRequest($node);
+        $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest($actionRequest);
+        $nodeAddress = NodeAddress::fromNode($node);
+        $uri = $nodeUriBuilder->uriFor($nodeAddress, Options::createForceAbsolute());
+        return $uri;
     }
+
 }
