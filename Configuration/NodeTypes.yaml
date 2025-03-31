@@ -3,33 +3,30 @@
     _name:
       search:
         indexing: '${node.name}'
-    _path:
-      search:
-        indexing: '${node.path}'
     _removed:
       search:
         indexing: ''
     _nodeType:
       search:
-        indexing: '${node.nodeType.name}'
-    __identifier:
+        indexing: '${node.nodeTypeName}'
+    __aggregateId:
       search:
-        indexing: '${node.identifier}'
+        indexing: '${node.aggregateId}'
     __path:
       search:
-        indexing: '${node.path}'
+        indexing: '${Indexing.aggregateIdPath(node)}'
     __nodeType:
       search:
-        indexing: '${node.nodeType.name}'
+        indexing: '${node.nodeTypeName}'
     __nodeTypeAndSupertypes:
       search:
         indexing: '${Indexing.extractNodeTypeNamesAndSupertypes(node)}'
     __dimensionsHash:
       search:
-        indexing: '${String.md5(Json.stringify(node.context.dimensions))}'
+        indexing: '${node.dimensionSpacePoint.hash}'
     __parentPath:
       search:
-        indexing: '${Indexing.buildAllPathPrefixes(node.parentPath)}'
+        indexing: '${Array.pop(Indexing.buildAllPathPrefixes(Indexing.aggregateIdPath(node)))}'
     __sortIndex:
       search:
         indexing: '${node.index}'
@@ -46,25 +43,25 @@ unstructured:
         indexing: ''
     _nodeType:
       search:
-        indexing: '${node.nodeType.name}'
-    __identifier:
+        indexing: '${node.nodeTypeName}'
+    __aggregateId:
       search:
-        indexing: '${node.identifier}'
+        indexing: '${node.aggregateId}'
     __path:
       search:
-        indexing: '${node.path}'
+        indexing: '${Indexing.aggregateIdPath(node)}'
     __nodeType:
       search:
-        indexing: '${node.nodeType.name}'
+        indexing: '${node.nodeTypeName}'
     __nodeTypeAndSupertypes:
       search:
         indexing: '${Indexing.extractNodeTypeNamesAndSupertypes(node)}'
     __dimensionsHash:
       search:
-        indexing: '${String.md5(Json.stringify(node.context.dimensions))}'
+        indexing: '${node.dimensionSpacePoint.hash}'
     __parentPath:
       search:
-        indexing: '${Indexing.buildAllPathPrefixes(node.parentPath)}'
+        indexing: '${Array.pop(Indexing.buildAllPathPrefixes(Indexing.aggregateIdPath(node)))}'
     __sortIndex:
       search:
         indexing: '${node.index}'

@@ -4,8 +4,12 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Search;
 
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindAncestorNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\ContentRepository\Core\Projection\ContentGraph\NodePath;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
+use Neos\ContentRepository\Search\Dto\NodeAggregateIdPath;
+use Neos\ContentRepository\Search\Eel\IndexingHelper;
 use Neos\ContentRepository\Search\Search\QueryBuilderInterface;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Eel\ProtectedContextAwareInterface;
@@ -237,13 +241,12 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function executeRaw(): \Traversable {
         $results = $this->indexClient->search($this->query, $this->parameters);
-
         $hits = [];
+        $subgraph = $this->contentRepositoryRegistry->subgraphForNode($this->contextNode);
         foreach ($results->getHits() as $hit) {
-            $nodePath = $hit['__path'];
-            $subgraph = $this->contentRepositoryRegistry->subgraphForNode($this->contextNode);
-            $nodePath = NodePath::fromString($nodePath);
-            $node = $subgraph->findNodeByPath($nodePath, $this->contextNode->aggregateId);
+            $aggregateId = $hit['__aggregateId'];
+            $aggregateId = NodeAggregateId::fromString($aggregateId);
+            $node = $subgraph->findNodeById($aggregateId);
             if ($node instanceof Node) {
                 $hit['__node'] = $node;
                 $hits[$node->aggregateId->value] = $hit;
@@ -304,10 +307,17 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function query(Node $contextNode): QueryBuilderInterface {
         $this->contextNode = $contextNode;
-        $nodePath = NodePath::fromNodeNames($contextNode->name);
-        $dimensionsHash = md5($contextNode->dimensionSpacePoint->toJson());
 
-        $this->parameters['filter'][] = '(__parentPath = "' . $nodePath . '" OR __path = "' . $nodePath . '")';
+        $dimensionsHash = md5($contextNode->dimensionSpacePoint->toJson());
+        $subgraph = $this->contentRepositoryRegistry->subgraphForNode($contextNode);
+
+        $ancestors = $subgraph->findAncestorNodes(
+            $contextNode->aggregateId,
+            FindAncestorNodesFilter::create()
+        )->reverse();
+
+        $nodeAggregateIdPath = NodeAggregateIdPath::fromNodes($ancestors);
+        $this->parameters['filter'][] = '(__parentPath = "' . $nodeAggregateIdPath->serializeToString() . '" OR __path = "' . $nodeAggregateIdPath->serializeToString() . '")';
         $this->parameters['filter'][] = '__dimensionsHash = "' . $dimensionsHash . '"';
 
         return $this;

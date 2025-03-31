@@ -287,8 +287,7 @@ class NodeIndexer extends AbstractNodeIndexer {
      */
     protected function generateUniqueNodeIdentifier(Node $node): string {
         $nodeIdentifier = (string)$node->aggregateId;
-        $dimensionsHash = md5($node->dimensionSpacePoint->toJson());
-
+        $dimensionsHash = $node->dimensionSpacePoint->hash;
         return $nodeIdentifier . '_' . $dimensionsHash;
     }
 }

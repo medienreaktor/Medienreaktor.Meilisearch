@@ -14,7 +14,7 @@ Neos:
 Medienreaktor:
   Meilisearch:
     client:
-      endpoint: 'http://10.0.1.121:52291'
+      endpoint: 'http://meilisearch:7700'
       apiKey: '1234'
     settings:
       displayedAttributes:
