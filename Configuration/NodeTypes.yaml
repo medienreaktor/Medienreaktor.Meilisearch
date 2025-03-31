@@ -37,7 +37,7 @@ unstructured:
         indexing: '${node.name}'
     _path:
       search:
-        indexing: '${node.path}'
+        indexing: '${Indexing.aggregateIdPath(node)}'
     _removed:
       search:
         indexing: ''
