@@ -4,7 +4,7 @@
     "description": "Integrates Meilisearch into Neos.",
     "license": "MIT",
     "require": {
-        "neos/content-repository-search": "dev-neos-9",
+        "neos/content-repository-search": "^5.0",
         "meilisearch/meilisearch-php": "*",
         "guzzlehttp/guzzle": "*",
         "http-interop/http-factory-guzzle": "^1.0"
