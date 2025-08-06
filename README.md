@@ -157,8 +157,9 @@ The search query builder supports the following features:
 |----------------------------------------------|------------------------------------------------------------|
 | `query(context)`                             | Sets the starting point for this query, e.g. `query(site)` |
 | `nodeType(nodeTypeName)`                     | Filters by the given NodeType, e.g. `nodeType('Neos.Neos:Document')` |
-| `fulltext(searchTerm)`                       | Performs a fulltext search |
-| `vector(vector)`                             | Performs a vector search (see below) |
+| `fulltext(searchTerm)`                       | Performs a keyword search |
+| `hybrid(searchTerm)`                         | Performs a hybrid search with vector and keyword |
+| `vector(searchTerm)`                         | Performs a vector search  |
 | `filter(filterString)`                       | Filters by given filter string, e.g. `filter('__nodeTypeAndSupertypes = "Neos.Neos:Document"')` (see [Meilisearch Documentation](https://www.meilisearch.com/docs/reference/api/search#filter))  |
 | `exactMatch(propertyName, value)`            | Filters by a node property |
 | `exactMatchMultiple(properties)`             | Filters by multiple node properties, e.g. `exactMatchMultiple(['author' => 'foo', 'date' => 'bar'])` |
@@ -269,38 +270,48 @@ The search query builder supports filtering with `geoRadius()` and sorting with 
 
 ## 📐 Vector Search
 
-You can use Meilisearch as a vector store with the experimental Vector Search feature. Activate it using the `/experimental-features` endpoint as [described in the release notes](https://github.com/meilisearch/meilisearch/releases/tag/v1.3.0).
+Meilisearch now supports vector search via embedders, making manual vector calculation obsolete.  
+Simply configure an embedder in your `Settings.yaml` under `Medienreaktor.Meilisearch.settings.embedders`.  
+You can use OpenAI, Hugging Face, or other providers – see the [Meilisearch documentation](https://www.meilisearch.com/docs/reference/api/settings#embedders-object) for all options.
 
-Vectors for each document have to be provided by you and indexed in the `_vector`-property of your node. This can be done writing a custom Eel-helper that computes the vectors using a third-party tool like [OpenAI](https://openai.com) or [Hugging Face](https://huggingface.co).
+A typical configuration for OpenAI looks like this:
 
+```yaml
+Medienreaktor:
+  Meilisearch:
+    settings:
+      embedders:
+        default:
+          source: openAi
+          apiKey: OPEN_AI_API_KEY
+          model: text-embedding-3-small
+          documentTemplate: "{% for field in fields %}{% if field.value != nil and field.value != '' %}{{ field.name }}: {{ field.value }}\n{% endif %}{% endfor %}"
+          documentTemplateMaxBytes: 8196
 ```
-'Neos.Neos:Document':
-  properties:
-    _vector:
-      search:
-        indexing: "${VectorIndexing.computeByNode(node)}"
+
+The `documentTemplate` should ideally generate a Markdown excerpt of your page to create meaningful vectors.
+
+### Using Embedders and semanticRatio in Fusion
+
+You can specify which embedder to use and adjust the balance between keyword and semantic search using the `embedder` and `semanticRatio` options in Fusion.  
+The `semanticRatio` controls how much weight is given to the semantic (vector) part of the search:  
+- `0.0` = only keyword search  
+- `1.0` = only vector search  
+- values in between combine both (e.g. `0.5` for a balanced hybrid search)
+
+If you have defined multiple embedders in your configuration, you can select one by name:
+
+```fusion
+searchQuery = ${Search.query(site).hybrid(this.searchTerm, {embedder: 'default', semanticRatio: 0.7})}
 ```
 
-The search query builder supports querying by vectors. Depending on your use case, vectors have to be computed again for the search phrase, e.g.:
+Or for pure vector search:
 
-    prototype(Medienreaktor.Meilisearch:Search) < prototype(Neos.Neos:ContentComponent) {
-        searchTerm = ${String.toString(request.arguments.search)}
-        searchVector = ${VectorIndexing.computeByString(this.searchTerm)}
+```fusion
+searchQuery = ${Search.query(site).vector(this.searchTerm, {embedder: 'default'})}
+```
 
-        vectorSearchQuery = ${this.searchVector ? Search.query(site).vector(this.searchVector) : null}
+- `embedder`: Name of the embedder as configured in your Settings.yaml (e.g. `'default'`, `'openai-embedder'`, `'huggingface-embedder'`)
+- `semanticRatio`: Float between `0.0` and `1.0` (default for hybrid: `0.5`, for vector: `1.0`)
 
-        searchResults = ${this.vectorSearchQuery.execute()}
-    }
-
-To show similar documents to your current document (e.g. for Wikis, Knowledge Bases or News Rooms), use the current document's vector as search vector.
-
-## 👩‍💻 Credits
-
-This package is heavily inspired by and some smaller code parts are copied from:
-
-+ [Sandstorm.LightweightElasticsearch](https://github.com/sandstorm/LightweightElasticsearch)
-+ [Flowpack.ElasticSearch.ContentRepositoryAdaptor](https://github.com/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor)
-+ [Flowpack.SimpleSearch.ContentRepositoryAdaptor](https://github.com/Flowpack/Flowpack.SimpleSearch.ContentRepositoryAdaptor)
-+ [Flowpack.SearchPlugin](https://github.com/Flowpack/Flowpack.SearchPlugin)
-
-All credits go to the original authors of these packages.
+For more details and advanced configuration, see the [Meilisearch documentation](https://www.meilisearch.com/docs/learn/experimental/vector-search)

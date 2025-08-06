@@ -50,6 +50,19 @@ class NodeIndexCommandController extends CommandController
      */
     protected $indexedNodes = 0;
 
+
+    /**
+     * Index all nodes.
+     *
+     * @return void
+     * @throws Exception
+     */
+    public function createIndexCommand(): void
+    {
+        $this->indexClient->createIndex();
+        $this->outputLine('Index created successfully.');
+    }
+
     /**
      * Index all nodes.
      *
