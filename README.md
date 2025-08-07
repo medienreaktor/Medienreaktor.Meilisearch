@@ -1,7 +1,8 @@
 # Medienreaktor.Meilisearch
 
 Integrates Meilisearch into Neos.
-**Compatibility tested with Meilisearch versions 1.2 to 1.8.**
+**Compatibility tested with Meilisearch versions 1.2 to 1.16.**  
+**Note:** Vector search with built-in embedders is only available from Meilisearch version 1.6.0 and above.
 
 This package aims for simplicity and minimal dependencies. It might therefore not be as sophisticated and extensible as packages like [Flowpack.ElasticSearch.ContentRepositoryAdaptor](https://github.com/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor), and to achieve this, some code parts had to be copied from these great packages (see Credits).
 
@@ -315,3 +316,22 @@ searchQuery = ${Search.query(site).vector(this.searchTerm, {embedder: 'default'}
 - `semanticRatio`: Float between `0.0` and `1.0` (default for hybrid: `0.5`, for vector: `1.0`)
 
 For more details and advanced configuration, see the [Meilisearch documentation](https://www.meilisearch.com/docs/learn/experimental/vector-search)
+
+## 🏗️ Indexing large amounts of nodes asynchronously
+
+If you need to index a huge amount of nodes in Meilisearch asynchronously, consider using the [Medienreaktor.Meilisearch.ContentRepositoryQueueIndexer](https://github.com/medienreaktor/Medienreaktor.Meilisearch.ContentRepositoryQueueIndexer) package.
+
+**Description:**  
+Neos CMS Meilisearch indexer based on a job queue.  
+This package can be used to index a huge amount of nodes in Meilisearch indexes. It uses the Flowpack JobQueue packages to handle the indexing asynchronously.
+
+## 👩‍💻 Credits
+
+This package is heavily inspired by and some smaller code parts are copied from:
+
++ [Sandstorm.LightweightElasticsearch](https://github.com/sandstorm/LightweightElasticsearch)
++ [Flowpack.ElasticSearch.ContentRepositoryAdaptor](https://github.com/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor)
++ [Flowpack.SimpleSearch.ContentRepositoryAdaptor](https://github.com/Flowpack/Flowpack.SimpleSearch.ContentRepositoryAdaptor)
++ [Flowpack.SearchPlugin](https://github.com/Flowpack/Flowpack.SearchPlugin)
+
+All credits go to the original authors of these packages.
