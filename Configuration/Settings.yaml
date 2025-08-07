@@ -41,10 +41,10 @@ Medienreaktor:
         - '_geo'
       sortableAttributes:
         - '_geo'
-      embedders:
-        'default':
-          source: openAi
-          apiKey: OPEN_AI_API_KEY
-          model: text-embedding-3-small
-          documentTemplate: "{% for field in fields %}{% if field.value != nil and field.value != '' %}{{ field.name }}: {{ field.value }}\n{% endif %}{% endfor %}"
-          documentTemplateMaxBytes: 8196
+      #embedders:
+        #'default':
+          #source: openAi
+          #apiKey: OPEN_AI_API_KEY
+          #model: text-embedding-3-small
+          #documentTemplate: "{% for field in fields %}{% if field.value != nil and field.value != '' %}{{ field.name }}: {{ field.value }}\n{% endif %}{% endfor %}"
+          #documentTemplateMaxBytes: 8196
