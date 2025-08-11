@@ -70,9 +70,10 @@ class NodeIndexer extends AbstractNodeIndexer
      *
      * @param NodeInterface $node
      * @param string $targetWorkspace
+     * @param bool $indexAllDimensions
      * @return void
      */
-    public function indexNode(NodeInterface $node, $targetWorkspace = null): void
+    public function indexNode(NodeInterface $node, $targetWorkspace = null, $indexAllDimensions = true): void
     {
         // Make sure this is a fulltext root, e.g. Neos.Neos:Document or subtype
         $node = $this->findFulltextRoot($node);
@@ -86,16 +87,22 @@ class NodeIndexer extends AbstractNodeIndexer
 
             $documents = [];
 
-            // For each dimension combination, extract the node variant properties and fulltext
-            $dimensionCombinations = $this->calculateDimensionCombinations();
-            if ($dimensionCombinations !== []) {
-                foreach ($dimensionCombinations as $combination) {
-                    if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
+            if ($indexAllDimensions) {
+                // For each dimension combination, extract the node variant properties and fulltext
+                $dimensionCombinations = $this->calculateDimensionCombinations();
+                if ($dimensionCombinations !== []) {
+                    foreach ($dimensionCombinations as $combination) {
+                        if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
+                            $documents[] = $nodeVariant;
+                        }
+                    }
+                } else {
+                    if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier)) {
                         $documents[] = $nodeVariant;
                     }
                 }
             } else {
-                if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier)) {
+                if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $node->getContext()->getDimensions())) {
                     $documents[] = $nodeVariant;
                 }
             }
