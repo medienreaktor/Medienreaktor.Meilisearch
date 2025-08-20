@@ -53,6 +53,12 @@ class NodeIndexCommandController extends CommandController {
     #[Inject]
     protected ContentRepositoryRegistry $contentRepositoryRegistry;
 
+
+    public function createIndexCommand(): void {
+        $this->indexClient->createIndex();
+        $this->outputLine('Created and update settings of index');
+    }
+
     /**
      * Index all nodes.
      *
@@ -69,7 +75,9 @@ class NodeIndexCommandController extends CommandController {
         $contentGraph = $contentRepository->getContentGraph($workspace->workspaceName);
         $rootNodeAggregate = $contentGraph->findRootNodeAggregateByType(NodeTypeName::fromString('Neos.Neos:Sites'));
 
-        $this->indexedNodes = $this->workspaceIndexer->index($contentRepositoryId, $workspace->workspaceName);
+
+        $this->output->progressStart();
+        $this->indexedNodes = $this->workspaceIndexer->index($contentRepositoryId, $workspace->workspaceName, singleCallback: fn() => $this->output->progressAdvance());
 
         $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes.');
     }
