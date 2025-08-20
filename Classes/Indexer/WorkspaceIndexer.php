@@ -52,17 +52,17 @@ final class WorkspaceIndexer
      * @param callable $callback
      * @return integer
      */
-    public function index(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, $limit = null, ?callable $callback = null): int
+    public function index(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, $limit = null, ?callable $callback = null, ?callable $singleCallback = null): int
     {
         $count = 0;
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $dimensionSpacePoints = $contentRepository->getVariationGraph()->getDimensionSpacePoints();
 
         if ($dimensionSpacePoints->isEmpty()) {
-            $count += $this->indexWithDimensions($contentRepositoryId, $workspaceName, DimensionSpacePoint::createWithoutDimensions(), $limit, $callback);
+            $count += $this->indexWithDimensions($contentRepositoryId, $workspaceName, DimensionSpacePoint::createWithoutDimensions(), $limit, $callback, $singleCallback);
         } else {
             foreach ($dimensionSpacePoints as $dimensionSpacePoint) {
-                $count += $this->indexWithDimensions($contentRepositoryId, $workspaceName, $dimensionSpacePoint, $limit, $callback);
+                $count += $this->indexWithDimensions($contentRepositoryId, $workspaceName, $dimensionSpacePoint, $limit, $callback, $singleCallback);
             }
         }
 
@@ -76,7 +76,7 @@ final class WorkspaceIndexer
      * @param callable $callback
      * @return int
      */
-    public function indexWithDimensions(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint, ?int $limit = null, ?callable $callback = null): int
+    public function indexWithDimensions(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint, ?int $limit = null, ?callable $callback = null, ?callable $singleCallback = null): int
     {
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $contentGraph = $contentRepository->getContentGraph($workspaceName);
@@ -97,6 +97,9 @@ final class WorkspaceIndexer
 
             $this->nodeIndexer->indexSingleNode($descendantNode);
             $indexedNodes++;
+            if ($singleCallback !== null) {
+                $singleCallback($workspaceName, $indexedNodes, $dimensionSpacePoint);
+            }
 
         };
 
