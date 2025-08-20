@@ -3,16 +3,17 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Domain\Service;
 
+use Exception;
 use Meilisearch\Client;
 use Meilisearch\Endpoints\Indexes;
+use Meilisearch\Exceptions\TimeOutException;
 use Meilisearch\Search\SearchResult;
 use Neos\Flow\Annotations as Flow;
 
 /**
  * Meilisearch Index client
  */
-class MeilisearchIndex implements IndexInterface
-{
+class MeilisearchIndex implements IndexInterface {
     /**
      * @var string
      */
@@ -44,46 +45,46 @@ class MeilisearchIndex implements IndexInterface
      * @param string $indexName
      * @Flow\Autowiring(false)
      */
-    public function __construct(string $indexName)
-    {
+    public function __construct(string $indexName) {
         $this->indexName = $indexName;
     }
 
-    public function initializeObject(): void
-    {
+    public function initializeObject(): void {
         $this->client = new Client($this->clientSettings['endpoint'], $this->clientSettings['apiKey']);
         $this->index = $this->client->index($this->indexName);
     }
 
-    public function createIndex(): void
-    {
+    public function createIndex(): void {
         $this->client->createIndex($this->indexName);
         $this->index->updateSettings($this->indexSettings);
+        $this->index->update(['primaryKey' => 'id']);
     }
 
     /**
      * @param array $documents Documents to add to the index
      * @return void
+     * @throws TimeOutException
      */
-    public function addDocuments(array $documents): void
-    {
-        $this->index->addDocuments($documents);
+    public function addDocuments(array $documents): void {
+        $task = $this->index->addDocuments($documents);
+        $result = $this->index->waitForTask($task['taskUid']);
+        if ($result['status'] !== 'succeeded') {
+            throw new Exception('Meilisearch index update failed: ' . $result['error']['message']);
+        }
     }
 
     /**
      * @param array $documents Documents to delete from the index
      * @return void
      */
-    public function deleteDocuments(array $documents): void
-    {
+    public function deleteDocuments(array $documents): void {
         $this->index->deleteDocuments($documents);
     }
 
     /**
      * Delete all documents from the index.
      */
-    public function deleteAllDocuments(): void
-    {
+    public function deleteAllDocuments(): void {
         $this->index->deleteAllDocuments();
     }
 
@@ -93,8 +94,7 @@ class MeilisearchIndex implements IndexInterface
      * @param string $identifier
      * @return array|FALSE
      */
-    public function findOneByIdentifier(string $identifier)
-    {
+    public function findOneByIdentifier(string $identifier) {
         try {
             $document = $this->index->getDocument($identifier);
             if ($document) {
@@ -113,9 +113,8 @@ class MeilisearchIndex implements IndexInterface
      * @param string $identifier
      * @return array|FALSE
      */
-    public function findAllIdentifiersByIdentifier(string $identifier)
-    {
-        $results = $this->index->search('', ['filter' => ['__identifier = '.$identifier]]);
+    public function findAllIdentifiersByIdentifier(string $identifier) {
+        $results = $this->index->search('', ['filter' => ['__identifier = ' . $identifier]]);
 
         $hits = [];
         foreach ($results->getHits() as $hit) {
@@ -131,8 +130,7 @@ class MeilisearchIndex implements IndexInterface
      * @param array $parameters
      * @return SearchResult
      */
-    public function search(string $query, array $parameters): SearchResult
-    {
+    public function search(string $query, array $parameters): SearchResult {
         if (isset($parameters['filter']) && is_array($parameters['filter'])) {
             $parameters['filter'] = implode(' AND ', $parameters['filter']);
         }
@@ -144,8 +142,7 @@ class MeilisearchIndex implements IndexInterface
     /**
      * @return string
      */
-    public function getIndexName(): string
-    {
+    public function getIndexName(): string {
         return $this->indexName;
     }
 }
