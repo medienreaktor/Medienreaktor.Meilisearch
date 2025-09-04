@@ -51,6 +51,12 @@ class NodeIndexer extends AbstractNodeIndexer
      */
     protected $contextFactory;
 
+    /**
+     * @Flow\InjectConfiguration(path="enableFulltext")
+     * @var bool
+     */
+    protected $enableFulltext;
+
     public function initializeObject($cause)
     {
         parent::initializeObject($cause);
@@ -135,7 +141,9 @@ class NodeIndexer extends AbstractNodeIndexer
 
             $document = $this->extractPropertiesAndFulltext($node, $fulltext);
             $document['id'] = $identifier;
-            $document['__fulltext'] = $fulltext;
+            if ($this->enableFulltext) {
+                $document['__fulltext'] = $fulltext;
+            }
 
             if ($uri = $this->nodeLinkService->getNodeUri($node, $context)) {
                 $document['__uri'] = $uri;
@@ -259,6 +267,10 @@ class NodeIndexer extends AbstractNodeIndexer
     protected function extractPropertiesAndFulltext(NodeInterface $node, array &$fulltextData, \Closure $nonIndexedPropertyErrorHandler = null): array
     {
         $result = parent::extractPropertiesAndFulltext($node, $fulltextData, $nonIndexedPropertyErrorHandler);
+
+        if (!$this->enableFulltext) {
+            return $result;
+        }
 
         $nodeTypeConstraints = $this->nodeTypeConstraintFactory->parseFilterString('Neos.Neos:Content,Neos.Neos:ContentCollection');
 

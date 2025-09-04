@@ -1,7 +1,7 @@
 # Medienreaktor.Meilisearch
 
 Integrates Meilisearch into Neos.
-**Compatibility tested with Meilisearch versions 1.2 to 1.16.**  
+**Compatibility tested with Meilisearch versions 1.2 to 1.16.**
 **Note:** Vector search with built-in embedders is only available from Meilisearch version 1.6.0 and above.
 
 This package aims for simplicity and minimal dependencies. It might therefore not be as sophisticated and extensible as packages like [Flowpack.ElasticSearch.ContentRepositoryAdaptor](https://github.com/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor), and to achieve this, some code parts had to be copied from these great packages (see Credits).
@@ -126,6 +126,18 @@ You will see that some properties are indexed twice, like `_path` and `__path`, 
 * `__*`-properties are private properties that are required for the Meilisearch-integration
 
 We have to make sure that our required properties are always there, so we better index them separately.
+
+### Disable fulltext extractor
+
+To disable the fulltext extractor and don't index `fulltext` at all, you can use the given setting `enableFulltext`
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    enableFulltext: false
+```
+
+This is useful if you depend on your own outofband rendering for document nodes.
 
 ## 📖 Usage with Neos and Fusion
 
@@ -271,8 +283,8 @@ The search query builder supports filtering with `geoRadius()` and sorting with 
 
 ## 📐 Vector Search
 
-Meilisearch now supports vector search via embedders, making manual vector calculation obsolete.  
-Simply configure an embedder in your `Settings.yaml` under `Medienreaktor.Meilisearch.settings.embedders`.  
+Meilisearch now supports vector search via embedders, making manual vector calculation obsolete.
+Simply configure an embedder in your `Settings.yaml` under `Medienreaktor.Meilisearch.settings.embedders`.
 You can use OpenAI, Hugging Face, or other providers – see the [Meilisearch documentation](https://www.meilisearch.com/docs/reference/api/settings#embedders-object) for all options.
 
 A typical configuration for OpenAI looks like this:
@@ -294,10 +306,10 @@ The `documentTemplate` should ideally generate a Markdown excerpt of your page t
 
 ### Using Embedders and semanticRatio in Fusion
 
-You can specify which embedder to use and adjust the balance between keyword and semantic search using the `embedder` and `semanticRatio` options in Fusion.  
-The `semanticRatio` controls how much weight is given to the semantic (vector) part of the search:  
-- `0.0` = only keyword search  
-- `1.0` = only vector search  
+You can specify which embedder to use and adjust the balance between keyword and semantic search using the `embedder` and `semanticRatio` options in Fusion.
+The `semanticRatio` controls how much weight is given to the semantic (vector) part of the search:
+- `0.0` = only keyword search
+- `1.0` = only vector search
 - values in between combine both (e.g. `0.5` for a balanced hybrid search)
 
 If you have defined multiple embedders in your configuration, you can select one by name:
@@ -321,8 +333,8 @@ For more details and advanced configuration, see the [Meilisearch documentation]
 
 If you need to index a huge amount of nodes in Meilisearch asynchronously, consider using the [Medienreaktor.Meilisearch.ContentRepositoryQueueIndexer](https://github.com/medienreaktor/Medienreaktor.Meilisearch.ContentRepositoryQueueIndexer) package.
 
-**Description:**  
-Neos CMS Meilisearch indexer based on a job queue.  
+**Description:**
+Neos CMS Meilisearch indexer based on a job queue.
 This package can be used to index a huge amount of nodes in Meilisearch indexes. It uses the Flowpack JobQueue packages to handle the indexing asynchronously.
 
 ## 👩‍💻 Credits
