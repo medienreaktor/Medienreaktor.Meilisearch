@@ -127,6 +127,18 @@ You will see that some properties are indexed twice, like `_path` and `__path`, 
 
 We have to make sure that our required properties are always there, so we better index them separately.
 
+### Disable fulltext extractor
+
+To disable the fulltext extractor and don't index `fulltext` at all, you can use the given setting `enableFulltext`
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    enableFulltext: false
+```
+
+This is useful if you depend on your own outofband rendering for document nodes.
+
 ## 📖 Usage with Neos and Fusion
 
 There is a built-in Content NodeType `Medienreaktor.Meilisearch:Search` for rendering the search form, results and pagination that may serve as a boilerplate for your projects. Just place it on your search page to start.

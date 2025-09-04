@@ -13,6 +13,7 @@ Neos:
         AssetUri: Medienreaktor\Meilisearch\Eel\AssetUriHelper
 Medienreaktor:
   Meilisearch:
+    enableFulltext: true
     client:
       endpoint: ''
       apiKey: ''
