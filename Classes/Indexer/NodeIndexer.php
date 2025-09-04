@@ -57,6 +57,12 @@ class NodeIndexer extends AbstractNodeIndexer
      */
     protected $enableFulltext;
 
+    /**
+     * @Flow\InjectConfiguration(path="neededAttributesForIndex")
+     * @var string[]
+     */
+    protected $neededAttributesForIndex;
+
     public function initializeObject($cause)
     {
         parent::initializeObject($cause);
@@ -152,6 +158,13 @@ class NodeIndexer extends AbstractNodeIndexer
             if (array_key_exists('__geo', $document)) {
                 $document['_geo'] = $document['__geo'];
                 unset($document['__geo']);
+            }
+
+            foreach ($this->neededAttributesForIndex as $key) {
+                if (empty($document[$key])) {
+                    $this->indexClient->deleteDocuments([$identifier]);
+                    return null;
+                }
             }
 
             return $document;
