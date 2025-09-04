@@ -84,38 +84,45 @@ class NodeIndexer extends AbstractNodeIndexer
         // Make sure this is a fulltext root, e.g. Neos.Neos:Document or subtype
         $node = $this->findFulltextRoot($node);
 
-        if ($node !== null) {
-            // The node aggregate identifier is a shared node identifier across all variants
-            $nodeIdentifier = (string) $node->getNodeAggregateIdentifier();
+        if ($node === null) {
+            return;
+        }
 
-            $allIndexedVariants = $this->indexClient->findAllIdentifiersByIdentifier($nodeIdentifier);
-            $this->indexClient->deleteDocuments($allIndexedVariants);
+        if (!$node->isVisible()) {
+            $this->removeNode($node);
+            return;
+        }
 
-            $documents = [];
+        // The node aggregate identifier is a shared node identifier across all variants
+        $nodeIdentifier = (string) $node->getNodeAggregateIdentifier();
 
-            if ($indexAllDimensions) {
-                // For each dimension combination, extract the node variant properties and fulltext
-                $dimensionCombinations = $this->calculateDimensionCombinations();
-                if ($dimensionCombinations !== []) {
-                    foreach ($dimensionCombinations as $combination) {
-                        if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
-                            $documents[] = $nodeVariant;
-                        }
-                    }
-                } else {
-                    if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier)) {
+        $allIndexedVariants = $this->indexClient->findAllIdentifiersByIdentifier($nodeIdentifier);
+        $this->indexClient->deleteDocuments($allIndexedVariants);
+
+        $documents = [];
+
+        if ($indexAllDimensions) {
+            // For each dimension combination, extract the node variant properties and fulltext
+            $dimensionCombinations = $this->calculateDimensionCombinations();
+            if ($dimensionCombinations !== []) {
+                foreach ($dimensionCombinations as $combination) {
+                    if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
                         $documents[] = $nodeVariant;
                     }
                 }
             } else {
-                if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $node->getContext()->getDimensions())) {
+                if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier)) {
                     $documents[] = $nodeVariant;
                 }
             }
-
-            // Finally, send all node variant documents to the index
-            $this->indexClient->addDocuments($documents);
+        } else {
+            if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $node->getContext()->getDimensions())) {
+                $documents[] = $nodeVariant;
+            }
         }
+
+        // Finally, send all node variant documents to the index
+        $this->indexClient->addDocuments($documents);
     }
 
     /**
