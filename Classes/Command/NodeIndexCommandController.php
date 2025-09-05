@@ -106,8 +106,8 @@ class NodeIndexCommandController extends CommandController
      */
     public function flushCommand(): void
     {
-        $this->indexClient->deleteAllDocuments();
-        $this->outputLine('All documents flushed from the index.');
+        $this->indexClient->deleteIndex();
+        $this->outputLine('The index has been deleted.');
     }
 
     /**
