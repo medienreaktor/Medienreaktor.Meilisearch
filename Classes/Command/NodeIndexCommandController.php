@@ -52,7 +52,7 @@ class NodeIndexCommandController extends CommandController
 
 
     /**
-     * Index all nodes.
+     * Create the index.
      *
      * @return void
      * @throws Exception
@@ -61,6 +61,18 @@ class NodeIndexCommandController extends CommandController
     {
         $this->indexClient->createIndex();
         $this->outputLine('Index created successfully.');
+    }
+
+    /**
+     * Delete the index.
+     *
+     * @return void
+     * @throws Exception
+     */
+    public function deleteIndexCommand(): void
+    {
+        $this->indexClient->deleteIndex();
+        $this->outputLine('The index has been deleted.');
     }
 
     /**
@@ -89,8 +101,7 @@ class NodeIndexCommandController extends CommandController
         if (self::isFulltextRoot($currentNode)) {
             try {
                 $this->nodeIndexer->indexNode($currentNode);
-            }
-            catch (NodeException|IndexingException $exception) {
+            } catch (NodeException|IndexingException $exception) {
                 throw new Exception(sprintf('Error during indexing of node %s (%s)', $currentNode->findNodePath(), (string) $currentNode->getNodeAggregateIdentifier()), 1690288327, $exception);
             }
             $this->indexedNodes++;
@@ -106,8 +117,8 @@ class NodeIndexCommandController extends CommandController
      */
     public function flushCommand(): void
     {
-        $this->indexClient->deleteIndex();
-        $this->outputLine('The index has been deleted.');
+        $this->indexClient->deleteAllDocuments();
+        $this->outputLine('All documents flushed from the index.');
     }
 
     /**
