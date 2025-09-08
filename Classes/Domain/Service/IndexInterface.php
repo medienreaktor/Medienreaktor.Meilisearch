@@ -33,6 +33,13 @@ interface IndexInterface
     public function deleteAllDocuments(): void;
 
     /**
+     * Delete index.
+     *
+     * @return void
+     */
+    public function deleteIndex(): void;
+
+    /**
      * @return string
      */
     public function getIndexName(): string;

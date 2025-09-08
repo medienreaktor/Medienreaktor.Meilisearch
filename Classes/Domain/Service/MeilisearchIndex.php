@@ -80,6 +80,14 @@ class MeilisearchIndex implements IndexInterface
     }
 
     /**
+     * Delete the index.
+     */
+    public function deleteIndex() :void
+    {
+        $this->client->deleteIndex($this->indexName);
+    }
+
+    /**
      * Delete all documents from the index.
      */
     public function deleteAllDocuments(): void
