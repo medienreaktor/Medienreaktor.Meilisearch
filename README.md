@@ -139,6 +139,17 @@ Medienreaktor:
 
 This is useful if you depend on your own outofband rendering for document nodes.
 
+### Set required attributes for indexing
+
+With the setting `neededAttributesForIndex` you can define attributes who must be set to index the document. Otherwhise, the document get's deleted from the index. For example: You need to have the `title` attribute set, otherwise the node will not be indexed and (if present) will be removed from the index. You can add as many attributes as you want.
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    neededAttributesForIndex:
+      - 'title'
+```
+
 ## 📖 Usage with Neos and Fusion
 
 There is a built-in Content NodeType `Medienreaktor.Meilisearch:Search` for rendering the search form, results and pagination that may serve as a boilerplate for your projects. Just place it on your search page to start.
