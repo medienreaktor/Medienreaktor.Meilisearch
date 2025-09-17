@@ -305,19 +305,4 @@ class NodeIndexer extends AbstractNodeIndexer
 
         return $nodeIdentifier.'_'.$dimensionsHash;
     }
-
-    /**
-     * Get the site path from the node.
-     *
-     * @param NodeInterface $node
-     * @return string
-     */
-    public function getSitePath(NodeInterface $node): string {
-        $path = $node->getPath();
-        $firstNodeSlash = strpos($path, '/', self::SITES_OFFSET);
-        if ($firstNodeSlash === false) {
-            return substr($path, 0); // gibt den ganzen Pfad zurück, falls kein weiterer Slash gefunden wird
-        }
-        return substr($path, 0, $firstNodeSlash);
-    }
 }
