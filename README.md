@@ -215,20 +215,20 @@ Please mind these three things:
 
 Setup your filter to always include the following filter string:
 `(__parentPath = "$nodePath" OR __path = "$nodePath") AND __dimensionsHash = "$dimensionsHash"`
-where `$nodePath` is the NodePath of your context node (e.g. site) and `$dimensionHash` is the MD5-hashed JSON-encoded context dimensions array.
+where `$nodePath` is the NodePath of your context node (e.g. site) and `$dimensionHash` is the hashed context dimensions array (use Neos Utility for hashing).
 
 You can obtain these values in PHP using:
 
 ```php
 $nodePath = (string) $contextNode->findNodePath();
-$dimensionsHash = md5(json_encode($contextNode->getContext()->getDimensions()));
+$dimensionsHash = $this->dimensionsService->hashByNode($contextNode);
 ```
 
 In Fusion, you get these values (assuming `site` is your desired context node) using:
 
 ```
 nodePath = ${site.path}
-dimensionsHash = ${String.md5(Json.stringify(site.context.dimensions))}
+dimensionsHash = ${Dimensions.hash(site.context.dimensions)}
 ```
 
 ### 2. The node URI

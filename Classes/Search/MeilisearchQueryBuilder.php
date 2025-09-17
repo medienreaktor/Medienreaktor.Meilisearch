@@ -8,6 +8,7 @@ use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Search\Search\QueryBuilderInterface;
 use Neos\Eel\ProtectedContextAwareInterface;
 use Neos\Flow\Annotations as Flow;
+use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
 
 /**
  * Meilisearch Query Builder for Content Repository searches
@@ -19,6 +20,12 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @var IndexInterface
      */
     protected $indexClient;
+
+    /**
+     * @Flow\Inject
+     * @var DimensionsService
+     */
+    protected $dimensionsService;
 
     /**
      * The node inside which searching should happen
@@ -340,7 +347,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     {
         $this->contextNode = $contextNode;
         $nodePath = (string) $contextNode->findNodePath();
-        $dimensionsHash = md5(json_encode($contextNode->getContext()->getDimensions()));
+        $dimensionsHash = $this->dimensionsService->hashByNode($contextNode);
 
         $this->parameters['filter'][] = '(__parentPath = "' . $nodePath . '" OR __path = "' . $nodePath . '")';
         $this->parameters['filter'][] = '__dimensionsHash = "' . $dimensionsHash . '"';
