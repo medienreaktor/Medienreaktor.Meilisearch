@@ -11,6 +11,7 @@ Neos:
       defaultContext:
         Json: Neos\Eel\Helper\JsonHelper
         AssetUri: Medienreaktor\Meilisearch\Eel\AssetUriHelper
+        Dimensions: Medienreaktor\Meilisearch\Eel\DimensionsHelper
 Medienreaktor:
   Meilisearch:
     enableFulltext: true

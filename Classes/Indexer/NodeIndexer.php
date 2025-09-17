@@ -5,10 +5,10 @@ namespace Medienreaktor\Meilisearch\Indexer;
 
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Domain\Service\NodeLinkService;
+use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraintFactory;
 use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraints;
-use Neos\ContentRepository\Domain\Service\ContentDimensionPresetSourceInterface;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use Neos\ContentRepository\Exception\NodeException;
 use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
@@ -35,15 +35,15 @@ class NodeIndexer extends AbstractNodeIndexer
 
     /**
      * @Flow\Inject
-     * @var NodeTypeConstraintFactory
+     * @var DimensionsService
      */
-    protected $nodeTypeConstraintFactory;
+    protected $dimensionsService;
 
     /**
      * @Flow\Inject
-     * @var ContentDimensionPresetSourceInterface
+     * @var NodeTypeConstraintFactory
      */
-    protected $contentDimensionPresetSource;
+    protected $nodeTypeConstraintFactory;
 
     /**
      * @Flow\Inject
@@ -83,9 +83,10 @@ class NodeIndexer extends AbstractNodeIndexer
      * @param NodeInterface $node
      * @param string $targetWorkspace
      * @param bool $indexAllDimensions
+     * @param bool $indexFallbackDimensions Whether to index dimensions that fall back to the current nodes dimensions
      * @return void
      */
-    public function indexNode(NodeInterface $node, $targetWorkspace = null, $indexAllDimensions = true): void
+    public function indexNode(NodeInterface $node, $targetWorkspace = null, $indexAllDimensions = true, $indexFallbackDimensions = true): void
     {
         // Make sure this is a fulltext root, e.g. Neos.Neos:Document or subtype
         $node = $this->findFulltextRoot($node);
@@ -102,27 +103,37 @@ class NodeIndexer extends AbstractNodeIndexer
         // The node aggregate identifier is a shared node identifier across all variants
         $nodeIdentifier = (string) $node->getNodeAggregateIdentifier();
 
-        $allIndexedVariants = $this->indexClient->findAllIdentifiersByIdentifier($nodeIdentifier);
-        $this->indexClient->deleteDocuments($allIndexedVariants);
-
         $documents = [];
 
-        if ($indexAllDimensions) {
-            // For each dimension combination, extract the node variant properties and fulltext
-            $dimensionCombinations = $this->calculateDimensionCombinations();
-            if ($dimensionCombinations !== []) {
-                foreach ($dimensionCombinations as $combination) {
+        // For each dimension combination, extract the node variant properties and fulltext
+        $dimensionCombinations = $this->dimensionsService->getDimensionCombinationsForIndexing($node);
+        if ($indexAllDimensions && $dimensionCombinations !== []) {
+            $allIndexedVariants = $this->indexClient->findAllIdentifiersByIdentifier($nodeIdentifier);
+            $this->indexClient->deleteDocuments($allIndexedVariants);
+            foreach ($dimensionCombinations as $combination) {
+                if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
+                    $documents[] = $nodeVariant;
+                }
+            }
+        } elseif($indexFallbackDimensions && $dimensionCombinations !== []) {
+            // Index only the current dimension and all dimensions that fall back to the current nodes dimensions.
+            foreach ($dimensionCombinations as $combination) {
+                // Check if current dimension and all dimensions that fall back to the current nodes dimensions
+                if (in_array($node->getContext()->getDimensions()['language'][0], $combination['language'])) {
+                    // delete previously indexed variant with same dimensions
+                    $indexedVariant = $this->indexClient->findAllIdentifiersByIdentifierAndDimensionsHash($nodeIdentifier, $this->dimensionsService->hash($combination));
+                    $this->indexClient->deleteDocuments($indexedVariant);
+                    // Index the new node variant
                     if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
                         $documents[] = $nodeVariant;
                     }
                 }
-            } else {
-                if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier)) {
-                    $documents[] = $nodeVariant;
-                }
             }
         } else {
-            if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $node->getContext()->getDimensions())) {
+            // Index only the current dimension combination without any fallbacks
+            $indexedVariant = $this->indexClient->findAllIdentifiersByIdentifierAndDimensionsHash($nodeIdentifier, $this->dimensionsService->hashByNode($node));
+            $this->indexClient->deleteDocuments($indexedVariant);
+            if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier)) {
                 $documents[] = $nodeVariant;
             }
         }
@@ -206,7 +217,7 @@ class NodeIndexer extends AbstractNodeIndexer
      * @param NodeInterface $node
      * @return NodeInterface
      */
-    protected function findFulltextRoot(NodeInterface $node): ?NodeInterface
+    public function findFulltextRoot(NodeInterface $node): ?NodeInterface
     {
         if (self::isFulltextRoot($node)) {
             return $node;
@@ -244,44 +255,6 @@ class NodeIndexer extends AbstractNodeIndexer
         }
 
         return false;
-    }
-
-    /**
-     * Calculate all dimension combinations from presets.
-     *
-     * @return array
-     */
-    protected function calculateDimensionCombinations(): array
-    {
-        $dimensionPresets = $this->contentDimensionPresetSource->getAllPresets();
-
-        $dimensionValueCountByDimension = [];
-        $possibleCombinationCount = 1;
-        $combinations = [];
-
-        foreach ($dimensionPresets as $dimensionName => $dimensionPreset) {
-            if (isset($dimensionPreset['presets']) && !empty($dimensionPreset['presets'])) {
-                $dimensionValueCountByDimension[$dimensionName] = count($dimensionPreset['presets']);
-                $possibleCombinationCount *= $dimensionValueCountByDimension[$dimensionName];
-            }
-        }
-
-        foreach ($dimensionPresets as $dimensionName => $dimensionPreset) {
-            for ($i = 0; $i < $possibleCombinationCount; $i++) {
-                if (!isset($combinations[$i]) || !is_array($combinations[$i])) {
-                    $combinations[$i] = [];
-                }
-
-                $currentDimensionCurrentPreset = current($dimensionPresets[$dimensionName]['presets']);
-                $combinations[$i][$dimensionName] = $currentDimensionCurrentPreset['values'];
-
-                if (!next($dimensionPresets[$dimensionName]['presets'])) {
-                    reset($dimensionPresets[$dimensionName]['presets']);
-                }
-            }
-        }
-
-        return $combinations;
     }
 
     protected function extractPropertiesAndFulltext(NodeInterface $node, array &$fulltextData, \Closure $nonIndexedPropertyErrorHandler = null): array
@@ -328,9 +301,23 @@ class NodeIndexer extends AbstractNodeIndexer
     {
         $nodeIdentifier = (string) $node->getNodeAggregateIdentifier();
 
-        $dimensions = $node->getContext()->getDimensions();
-        $dimensionsHash = md5(json_encode($dimensions));
+        $dimensionsHash = $this->dimensionsService->hashByNode($node);
 
         return $nodeIdentifier.'_'.$dimensionsHash;
+    }
+
+    /**
+     * Get the site path from the node.
+     *
+     * @param NodeInterface $node
+     * @return string
+     */
+    public function getSitePath(NodeInterface $node): string {
+        $path = $node->getPath();
+        $firstNodeSlash = strpos($path, '/', self::SITES_OFFSET);
+        if ($firstNodeSlash === false) {
+            return substr($path, 0); // gibt den ganzen Pfad zurück, falls kein weiterer Slash gefunden wird
+        }
+        return substr($path, 0, $firstNodeSlash);
     }
 }

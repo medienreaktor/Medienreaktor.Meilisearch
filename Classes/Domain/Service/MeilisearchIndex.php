@@ -133,6 +133,28 @@ class MeilisearchIndex implements IndexInterface
     }
 
     /**
+     * Returns all index identifiers by identifier and dimensionsHash or FALSE if none exist.
+     *
+     * @param string $identifier
+     * @param string $dimensionsHash
+     * @return array|FALSE
+     */
+    public function findAllIdentifiersByIdentifierAndDimensionsHash(string $identifier, string $dimensionsHash)
+    {
+        $filter = [
+            '__identifier = ' . $identifier,
+            '__dimensionsHash = "' . $dimensionsHash . '"'
+        ];
+        $results = $this->index->search('', ['filter' => $filter]);
+
+        $hits = [];
+        foreach ($results->getHits() as $hit) {
+            $hits[] = $hit['id'];
+        }
+        return $hits;
+    }
+
+    /**
      * Performs a search.
      *
      * @param string $query

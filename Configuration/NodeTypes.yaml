@@ -24,9 +24,12 @@
     '__nodeTypeAndSupertypes':
       search:
         indexing: "${Indexing.extractNodeTypeNamesAndSupertypes(node.nodeType)}"
+    '__dimensions':
+      search:
+        indexing: "${node.context.dimensions}"
     '__dimensionsHash':
       search:
-        indexing: "${String.md5(Json.stringify(node.context.dimensions))}"
+        indexing: "${Dimensions.hash(node.context.dimensions)}"
     '__parentPath':
       search:
         indexing: "${Indexing.buildAllPathPrefixes(node.parentPath)}"
