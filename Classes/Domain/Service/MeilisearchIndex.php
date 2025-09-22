@@ -178,4 +178,13 @@ class MeilisearchIndex implements IndexInterface
     {
         return $this->indexName;
     }
+
+    /**
+     * Überschreibt die aktuellen Index-Settings vollständig und wendet sie an.
+     */
+    public function updateCustomSettings(array $settings): void
+    {
+        $this->indexSettings = $settings;
+        $this->index->updateSettings($this->indexSettings);
+    }
 }
