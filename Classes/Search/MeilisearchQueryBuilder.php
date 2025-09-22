@@ -278,7 +278,13 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
         $results = $this->indexClient->search($this->query, $this->parameters);
 
         $hits = [];
+
         foreach ($results->getHits() as $hit) {
+            if (isset($hit['__path']) && str_contains($hit['__path'], 'assets')) {
+                $hits[$hit['__uri']] = $hit;
+                continue;
+            }
+
             $nodePath = $hit['__path'];
             $node = $this->contextNode->getNode($nodePath);
             if ($node instanceof NodeInterface) {
@@ -286,6 +292,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
                 $hits[(string) $node->getNodeAggregateIdentifier()] = $hit;
             }
         }
+
         return (new \ArrayObject(array_values($hits)))->getIterator();
     }
 
