@@ -297,6 +297,24 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
+     * Execute the query and return the raw results enriched with node information
+     *
+     * @return \Traversable<\Neos\ContentRepository\Domain\Model\NodeInterface>
+     */
+    public function executeWithoutProcessing(): \Traversable
+    {
+        $results = $this->indexClient->search($this->query, $this->parameters);
+
+        $hits = [];
+
+        foreach ($results->getHits() as $hit) {
+            $hits[$hit['id']] = $hit;
+        }
+
+        return (new \ArrayObject(array_values($hits)))->getIterator();
+    }
+
+    /**
      * Return the total number of hits for the query.
      *
      * @return int
