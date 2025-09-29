@@ -118,8 +118,6 @@ class MeilisearchIndex implements IndexInterface
         try {
             $this->index->deleteDocuments($options);
         } catch (\Meilisearch\Exceptions\ApiException $e) {
-            var_dump($e->getMessage());
-            die();
             // Optional: Logging hier möglich. Still schlucken oder rethrow? Aktuell still, um Verhalten der anderen Methoden zu spiegeln.
         }
     }
