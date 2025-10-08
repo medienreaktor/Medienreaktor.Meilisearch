@@ -247,6 +247,17 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
         $this->parameters['matchingStrategy'] = $matchingStrategy;
         return $this;
     }
+    
+    /**
+     * Setzt the Distinct Attribute.
+     * @param string $attribute
+     * @return QueryBuilderInterface
+     */
+    public function distinct(string $attribute): QueryBuilderInterface
+    {
+        $this->parameters['distinctAttribute'] = $attribute;
+        return $this;
+    }
 
     /**
      * Execute the query and return the list of nodes as result
