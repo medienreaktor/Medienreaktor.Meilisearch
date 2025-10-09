@@ -255,7 +255,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function distinct(string $attribute): QueryBuilderInterface
     {
-        $this->parameters['distinctAttribute'] = $attribute;
+        $this->parameters['distinct'] = $attribute;
         return $this;
     }
 
