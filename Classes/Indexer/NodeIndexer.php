@@ -52,13 +52,13 @@ class NodeIndexer extends AbstractNodeIndexer
     protected $contextFactory;
 
     /**
-     * @Flow\InjectConfiguration(path="enableFulltext")
+     * @Flow\InjectConfiguration(package="Medienreaktor.Meilisearch", path="enableFulltext")
      * @var bool
      */
     protected $enableFulltext;
 
     /**
-     * @Flow\InjectConfiguration(path="neededAttributesForIndex")
+     * @Flow\InjectConfiguration(package="Medienreaktor.Meilisearch", path="neededAttributesForIndex")
      * @var string[]
      */
     protected $neededAttributesForIndex;
