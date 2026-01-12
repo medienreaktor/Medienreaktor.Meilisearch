@@ -69,7 +69,7 @@ class AssetUriHelper implements ProtectedContextAwareInterface
 
         // If no baseUri is set, we create async thumbnails
         $async = !$this->baseUri;
-        $thumbnailConfiguration = new ThumbnailConfiguration($width, $width, $height, $height, $allowCropping, $allowUpScaling, $async, format: $format);
+        $thumbnailConfiguration = new ThumbnailConfiguration($width, $width, $height, $height, $allowCropping, $allowUpScaling, $async, null, $format);
 
         if ($async) {
             $thumbnailImage = $this->thumbnailService->getThumbnail($value, $thumbnailConfiguration);
