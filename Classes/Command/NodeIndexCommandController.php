@@ -85,22 +85,70 @@ class NodeIndexCommandController extends CommandController
     {
         $this->indexClient->createIndex();
 
-        $context = $this->contextFactory->create(['workspaceName' => 'live']);
-        $rootNode = $context->getRootNode();
-        $this->traverseNodes($rootNode);
+        // Get all dimension presets and create dimension combinations
+        $dimensionPresets = $this->contentDimensionPresetSource->getAllPresets();
+        $dimensionCombinations = $this->buildDimensionCombinations($dimensionPresets);
+
+        if (empty($dimensionCombinations)) {
+            // No dimensions configured, index without dimensions
+            $this->outputLine('No dimension combinations found, indexing without dimensions');
+            $context = $this->contextFactory->create(['workspaceName' => 'live']);
+            $rootNode = $context->getRootNode();
+            $this->traverseNodes($rootNode);
+        } else {
+            // Index for each dimension combination
+            foreach ($dimensionCombinations as $dimensions) {
+                $dimensionLabel = implode(', ', array_map(fn($k, $v) => "$k: " . implode(',', $v), array_keys($dimensions), $dimensions));
+                $this->outputLine('Indexing dimension: ' . $dimensionLabel);
+
+                $context = $this->contextFactory->create([
+                    'workspaceName' => 'live',
+                    'dimensions' => $dimensions
+                ]);
+                $rootNode = $context->getRootNode();
+                $this->traverseNodes($rootNode, false, $dimensions);
+            }
+        }
 
         $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes.');
     }
 
     /**
+     * Build all dimension combinations from presets
+     *
+     * @param array $dimensionPresets
+     * @return array
+     */
+    protected function buildDimensionCombinations(array $dimensionPresets): array
+    {
+        $combinations = [[]];
+
+        foreach ($dimensionPresets as $dimensionName => $dimensionConfig) {
+            $newCombinations = [];
+            foreach ($combinations as $combination) {
+                foreach ($dimensionConfig['presets'] as $presetKey => $preset) {
+                    $newCombination = $combination;
+                    $newCombination[$dimensionName] = $preset['values'];
+                    $newCombinations[] = $newCombination;
+                }
+            }
+            $combinations = $newCombinations;
+        }
+
+        return $combinations;
+    }
+
+    /**
      * @param NodeInterface $currentNode
+     * @param bool $indexAllDimensions Whether to index all dimension combinations for each node
+     * @param array $targetDimensionCombination Optional: Force indexing with this dimension (for shine-through)
      * @throws Exception
      */
-    protected function traverseNodes(NodeInterface $currentNode): void
+    protected function traverseNodes(NodeInterface $currentNode, bool $indexAllDimensions = true, array $targetDimensionCombination = []): void
     {
         if (self::isFulltextRoot($currentNode)) {
             try {
-                $this->nodeIndexer->indexNode($currentNode);
+                $this->nodeIndexer->indexNode($currentNode, null, $indexAllDimensions, false, $targetDimensionCombination);
             } catch (NodeException|IndexingException $exception) {
                 throw new Exception(sprintf('Error during indexing of node %s (%s)', $currentNode->findNodePath(), (string) $currentNode->getNodeAggregateIdentifier()), 1690288327, $exception);
             }
@@ -108,7 +156,7 @@ class NodeIndexCommandController extends CommandController
         }
 
         foreach ($currentNode->findChildNodes() as $childNode) {
-            $this->traverseNodes($childNode);
+            $this->traverseNodes($childNode, $indexAllDimensions, $targetDimensionCombination);
         }
     }
 
