@@ -3,29 +3,24 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Eel;
 
-use Medienreaktor\Meilisearch\Domain\Service\RequestService;
 use Neos\Eel\ProtectedContextAwareInterface;
 use Neos\Flow\Annotations as Flow;
-use Neos\Flow\Mvc\Routing\UriBuilder;
 use Neos\Media\Domain\Model\AssetInterface;
-use Neos\Media\Domain\Model\Thumbnail;
+use Neos\Media\Domain\Model\ImageInterface;
 use Neos\Media\Domain\Model\ThumbnailConfiguration;
-use Neos\Media\Domain\Service\AssetService;
 use Neos\Media\Domain\Service\ThumbnailService;
+use Psr\Log\LoggerInterface;
 
 /**
  * AssetUriHelper
+ *
+ * Generates thumbnail URIs for Meilisearch indexing. Thumbnails are always
+ * generated synchronously so the index contains stable /_Resources/ paths
+ * instead of /media/thumbnail/{uuid} controller URIs that become invalid
+ * when thumbnail entities are cleared.
  */
 class AssetUriHelper implements ProtectedContextAwareInterface
 {
-    /**
-     * Resource publisher
-     *
-     * @Flow\Inject
-     * @var AssetService
-     */
-    protected $assetService;
-
     /**
      * @Flow\Inject
      * @var ThumbnailService
@@ -34,24 +29,15 @@ class AssetUriHelper implements ProtectedContextAwareInterface
 
     /**
      * @Flow\Inject
-     * @var UriBuilder
+     * @var LoggerInterface
      */
-    protected $uriBuilder;
+    protected $logger;
 
     /**
-    * @Flow\Inject
-    * @var RequestService
-    */
-    protected $requestService;
-
-    /**
-     * @var string
-     * @Flow\InjectConfiguration(path="http.baseUri", package="Neos.Flow")
-     */
-    protected $baseUri;
-
-    /**
-     * Build asset uri
+     * Build a relative persistent resource URI for the given asset's thumbnail.
+     *
+     * Forces synchronous thumbnail generation and constructs the URI manually
+     * to avoid dependency on Neos.Flow.http.baseUri (unavailable in CLI).
      *
      * @param AssetInterface|AssetInterface[]|null $value
      * @param integer $width
@@ -67,29 +53,35 @@ class AssetUriHelper implements ProtectedContextAwareInterface
             return null;
         }
 
-        // If no baseUri is set, we create async thumbnails
-        $async = !$this->baseUri;
-        $thumbnailConfiguration = new ThumbnailConfiguration($width, $width, $height, $height, $allowCropping, $allowUpScaling, $async, format: $format);
+        try {
+            $thumbnailConfiguration = new ThumbnailConfiguration(
+                $width, $width, $height, $height,
+                $allowCropping, $allowUpScaling,
+                false,
+                null, $format
+            );
 
-        if ($async) {
-            $thumbnailImage = $this->thumbnailService->getThumbnail($value, $thumbnailConfiguration);
-            if ($thumbnailImage instanceof Thumbnail) {
-                $request = $this->requestService->createActionRequest();
-                $this->uriBuilder->setRequest($request->getMainRequest());
-                $uri = $this->uriBuilder
-                        ->reset()
-                        ->setCreateAbsoluteUri(false)
-                        ->uriFor('thumbnail', ['thumbnail' => $thumbnailImage], 'Thumbnail', 'Neos.Media');
-                return $uri ?: null;
+            $thumbnail = $this->thumbnailService->getThumbnail($value, $thumbnailConfiguration);
+            if (!$thumbnail instanceof ImageInterface) {
+                return null;
             }
-            return null;
-        }
 
-        $thumbnailData = $this->assetService->getThumbnailUriAndSizeForAsset($value, $thumbnailConfiguration);
-        if ($thumbnailData === null) {
+            $resource = $thumbnail->getResource();
+            if ($resource === null) {
+                return null;
+            }
+
+            // Build relative URI matching Flow's FileSystemTarget with subdivideHashPathSegment
+            $sha1 = $resource->getSha1();
+            return '/_Resources/Persistent/'
+                . $sha1[0] . '/' . $sha1[1] . '/' . $sha1[2] . '/' . $sha1[3]
+                . '/' . $sha1 . '/' . rawurlencode($resource->getFilename());
+        } catch (\Exception $e) {
+            $this->logger->warning('Meilisearch AssetUriHelper: Failed to generate thumbnail URI', [
+                'exception' => $e->getMessage(),
+            ]);
             return null;
         }
-        return $thumbnailData['src'];
     }
 
     /**
