@@ -1,0 +1,14 @@
+privilegeTargets:
+
+  'Neos\Flow\Security\Authorization\Privilege\Method\MethodPrivilege':
+
+    'Medienreaktor.Meilisearch:SearchThumbnail':
+      matcher: 'method(Medienreaktor\Meilisearch\Controller\ThumbnailController->thumbnailAction())'
+
+roles:
+
+  'Neos.Flow:Everybody':
+    privileges:
+      -
+        privilegeTarget: 'Medienreaktor.Meilisearch:SearchThumbnail'
+        permission: GRANT
