@@ -1,4 +1,9 @@
 Neos:
+  Flow:
+    mvc:
+      routes:
+        'Medienreaktor.Meilisearch':
+          position: 'before Neos.Neos'
   Neos:
     fusion:
       autoInclude:

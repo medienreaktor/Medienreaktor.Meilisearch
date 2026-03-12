@@ -1,0 +1,10 @@
+-
+  name: 'Meilisearch search thumbnail proxy'
+  uriPattern: 'search/thumbnail/{asset}'
+  defaults:
+    '@package': 'Medienreaktor.Meilisearch'
+    '@controller': 'Thumbnail'
+    '@action': 'thumbnail'
+    '@format': 'html'
+  appendExceedingArguments: true
+  httpMethods: ['GET']
