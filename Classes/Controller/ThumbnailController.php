@@ -44,8 +44,13 @@ class ThumbnailController extends ActionController
      * @param bool $crop
      * @param string|null $format
      */
-    public function thumbnailAction(string $asset, int $width = 600, int $height = 450, bool $crop = true, ?string $format = null): void
-    {
+    public function thumbnailAction(
+        string $asset,
+        int $width = 600,
+        int $height = 450,
+        bool $crop = true,
+        ?string $format = null
+    ): void {
         /** @var AssetInterface|null $assetObject */
         $assetObject = $this->assetRepository->findByIdentifier($asset);
 
@@ -55,10 +60,15 @@ class ThumbnailController extends ActionController
         }
 
         $thumbnailConfiguration = new ThumbnailConfiguration(
-            $width, $width, $height, $height,
-            $crop, false,
+            $width,
+            $width,
+            $height,
+            $height,
+            $crop,
             false,
-            null, $format
+            false,
+            null,
+            $format
         );
 
         $thumbnail = $this->thumbnailService->getThumbnail($assetObject, $thumbnailConfiguration);

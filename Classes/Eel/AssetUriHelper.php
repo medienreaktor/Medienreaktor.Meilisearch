@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Eel;
 
+use Medienreaktor\Meilisearch\Domain\Service\RequestService;
 use Neos\Eel\ProtectedContextAwareInterface;
 use Neos\Flow\Annotations as Flow;
+use Neos\Flow\Mvc\Routing\UriBuilder;
 use Neos\Flow\Persistence\PersistenceManagerInterface;
 use Neos\Media\Domain\Model\AssetInterface;
 
@@ -25,6 +27,12 @@ class AssetUriHelper implements ProtectedContextAwareInterface
     protected $persistenceManager;
 
     /**
+     * @Flow\Inject
+     * @var RequestService
+     */
+    protected $requestService;
+
+    /**
      * Build a proxy URI that encodes the asset identifier and thumbnail params.
      *
      * The returned URI is resolved by Medienreaktor\Meilisearch\Controller\ThumbnailController,
@@ -36,11 +44,17 @@ class AssetUriHelper implements ProtectedContextAwareInterface
      * @param integer $height
      * @param boolean $allowCropping
      * @param boolean $allowUpScaling
-     * @param string $format
-     * @return null|string
+     * @param string|null $format
+     * @return string|null
      */
-    public function build($value, $width, $height, $allowCropping = true, $allowUpScaling = true, $format = null)
-    {
+    public function build(
+        $value,
+        $width,
+        $height,
+        $allowCropping = true,
+        $allowUpScaling = true,
+        $format = null
+    ): ?string {
         if (!$value instanceof AssetInterface) {
             return null;
         }
@@ -50,17 +64,30 @@ class AssetUriHelper implements ProtectedContextAwareInterface
             return null;
         }
 
-        $params = [];
-        $params['width'] = (int)$width;
-        $params['height'] = (int)$height;
+        $arguments = [
+            'asset' => $identifier,
+            'width' => (int)$width,
+            'height' => (int)$height,
+        ];
+
         if ($allowCropping) {
-            $params['crop'] = 1;
+            $arguments['crop'] = 1;
         }
         if ($format !== null) {
-            $params['format'] = $format;
+            $arguments['format'] = $format;
         }
 
-        return '/search/thumbnail/' . $identifier . '?' . http_build_query($params);
+        $actionRequest = $this->requestService->createActionRequest();
+        $uriBuilder = new UriBuilder();
+        $uriBuilder->setRequest($actionRequest);
+        $uriBuilder->setCreateAbsoluteUri(false);
+
+        return $uriBuilder->uriFor(
+            'thumbnail',
+            $arguments,
+            'Thumbnail',
+            'Medienreaktor.Meilisearch'
+        ) ?: null;
     }
 
     /**
@@ -69,7 +96,7 @@ class AssetUriHelper implements ProtectedContextAwareInterface
      * @param string $methodName
      * @return boolean
      */
-    public function allowsCallOfMethod($methodName)
+    public function allowsCallOfMethod($methodName): bool
     {
         return true;
     }
