@@ -87,28 +87,45 @@ class NodeIndexCommandController extends CommandController
 
         $context = $this->contextFactory->create(['workspaceName' => 'live']);
         $rootNode = $context->getRootNode();
-        $this->traverseNodes($rootNode);
 
-        $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes.');
+        $this->outputLine('Collecting indexable nodes...');
+        $nodes = [];
+        $this->collectNodes($rootNode, $nodes);
+        $total = count($nodes);
+
+        $this->outputLine('Indexing %d nodes...', [$total]);
+        $this->output->progressStart($total);
+
+        foreach ($nodes as $node) {
+            try {
+                $this->nodeIndexer->indexNode($node);
+            } catch (NodeException|IndexingException $exception) {
+                throw new Exception(sprintf('Error during indexing of node %s (%s)', $node->findNodePath(), (string) $node->getNodeAggregateIdentifier()), 1690288327, $exception);
+            }
+            $this->indexedNodes++;
+            $this->output->progressAdvance();
+        }
+
+        $this->output->progressFinish();
+        $this->outputLine('');
+        $this->outputLine('Finished indexing %d nodes.', [$this->indexedNodes]);
     }
 
     /**
+     * Recursively collects all fulltext root nodes into a flat array so that
+     * the total count is known before indexing begins.
+     *
      * @param NodeInterface $currentNode
-     * @throws Exception
+     * @param NodeInterface[] $nodes
      */
-    protected function traverseNodes(NodeInterface $currentNode): void
+    protected function collectNodes(NodeInterface $currentNode, array &$nodes): void
     {
         if (self::isFulltextRoot($currentNode)) {
-            try {
-                $this->nodeIndexer->indexNode($currentNode);
-            } catch (NodeException|IndexingException $exception) {
-                throw new Exception(sprintf('Error during indexing of node %s (%s)', $currentNode->findNodePath(), (string) $currentNode->getNodeAggregateIdentifier()), 1690288327, $exception);
-            }
-            $this->indexedNodes++;
+            $nodes[] = $currentNode;
         }
 
         foreach ($currentNode->findChildNodes() as $childNode) {
-            $this->traverseNodes($childNode);
+            $this->collectNodes($childNode, $nodes);
         }
     }
 
