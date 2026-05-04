@@ -13,6 +13,9 @@ Neos:
         AssetUri: Medienreaktor\Meilisearch\Eel\AssetUriHelper
 Medienreaktor:
   Meilisearch:
+    indexing:
+      batchSize: 100
+      maxFulltextBytes: 500000
     client:
       endpoint: 'http://meilisearch:7700'
       apiKey: '1234'

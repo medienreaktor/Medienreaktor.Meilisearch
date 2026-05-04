@@ -36,11 +36,26 @@ use function RectorPrefix202304\dump;
  * @Flow\Scope("singleton")
  */
 class NodeIndexer extends AbstractNodeIndexer {
+
     /**
      * @Flow\Inject
      * @var IndexInterface
      */
     protected $indexClient;
+
+    protected array $documentBuffer = [];
+
+    /**
+     * @Flow\InjectConfiguration(path="indexing.batchSize", package="Medienreaktor.Meilisearch")
+     * @var int
+     */
+    protected $batchSize;
+
+    /**
+     * @Flow\InjectConfiguration(path="indexing.maxFulltextBytes", package="Medienreaktor.Meilisearch")
+     * @var int
+     */
+    protected $maxFulltextBytes;
 
     /**
      * @Flow\Inject
@@ -126,7 +141,12 @@ class NodeIndexer extends AbstractNodeIndexer {
         if ($node !== null) {
             $this->removeNode($node);
             $nodeVariant = $this->extractNodeVariant($node, $node->dimensionSpacePoint);
-            $this->indexClient->addDocuments([$nodeVariant]);
+            if ($nodeVariant !== null) {
+                $this->documentBuffer[] = $nodeVariant;
+            }
+            if (count($this->documentBuffer) >= $this->batchSize) {
+                $this->flushBuffer();
+            }
         }
     }
 
@@ -150,7 +170,7 @@ class NodeIndexer extends AbstractNodeIndexer {
 
             $document = $this->extractPropertiesAndFulltext($node, $fulltext);
             $document['id'] = $identifier;
-            $document['__fulltext'] = $fulltext;
+            $document['__fulltext'] = $this->truncateFulltext($fulltext);
             $document['title'] = $node->getProperty("title");
             $uri = $this->nodeLinkService->getNodeUri($node);
             $document['__uri'] = $uri;
@@ -178,11 +198,16 @@ class NodeIndexer extends AbstractNodeIndexer {
         $this->indexClient->deleteDocuments([$identifier]);
     }
 
-    /**
-     * @return void
-     */
     public function flush(): void {
-        return;
+        $this->flushBuffer();
+    }
+
+    protected function flushBuffer(): void {
+        if (empty($this->documentBuffer)) {
+            return;
+        }
+        $this->indexClient->addDocuments($this->documentBuffer);
+        $this->documentBuffer = [];
     }
 
     /**
@@ -243,6 +268,16 @@ class NodeIndexer extends AbstractNodeIndexer {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
         $dimensions = $contentRepository->getVariationGraph()->getDimensionSpacePoints();
         return $dimensions;
+    }
+
+    protected function truncateFulltext(array $fulltext): array
+    {
+        foreach ($fulltext as $key => $value) {
+            if (is_string($value) && strlen($value) > $this->maxFulltextBytes) {
+                $fulltext[$key] = mb_substr($value, 0, $this->maxFulltextBytes);
+            }
+        }
+        return $fulltext;
     }
 
     protected function extractPropertiesAndFulltext(Node|null $node, array &$fulltextData, \Closure $nonIndexedPropertyErrorHandler = null): array {
