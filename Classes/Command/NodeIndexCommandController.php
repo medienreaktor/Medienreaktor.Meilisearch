@@ -98,9 +98,12 @@ class NodeIndexCommandController extends CommandController {
      */
     protected function isFulltextRoot(NodeAggregate $node): bool {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
-        if ($contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->hasConfiguration('search')) {
-            $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
-            $searchSettingsForNode = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->getConfiguration('search');
+        $nodeType = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
+        if ($nodeType === null) {
+            return false;
+        }
+        if ($nodeType->hasConfiguration('search')) {
+            $searchSettingsForNode = $nodeType->getConfiguration('search');
             if (isset($searchSettingsForNode['fulltext']['isRoot']) && $searchSettingsForNode['fulltext']['isRoot'] === true) {
                 return true;
             }

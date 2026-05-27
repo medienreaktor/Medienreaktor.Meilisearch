@@ -89,6 +89,17 @@ class MeilisearchIndex implements IndexInterface {
     }
 
     /**
+     * Delete documents matching the given Meilisearch filter expression.
+     *
+     * @param array<int,string>|string $filter
+     * @return void
+     */
+    public function deleteByFilter(array|string $filter): void {
+        $filterString = is_array($filter) ? implode(' AND ', $filter) : $filter;
+        $this->index->deleteDocuments(['filter' => $filterString]);
+    }
+
+    /**
      * Returns an index entry by identifier or NULL if it doesn't exist.
      *
      * @param string $identifier

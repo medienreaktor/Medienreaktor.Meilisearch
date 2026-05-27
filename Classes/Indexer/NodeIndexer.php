@@ -247,9 +247,12 @@ class NodeIndexer extends AbstractNodeIndexer {
      */
     protected function isFulltextRoot(Node $node): bool {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
-        if ($contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->hasConfiguration('search')) {
-            $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
-            $searchSettingsForNode = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->getConfiguration('search');
+        $nodeType = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
+        if ($nodeType === null) {
+            return false;
+        }
+        if ($nodeType->hasConfiguration('search')) {
+            $searchSettingsForNode = $nodeType->getConfiguration('search');
             if (isset($searchSettingsForNode['fulltext']['isRoot']) && $searchSettingsForNode['fulltext']['isRoot'] === true) {
                 return true;
             }
@@ -297,9 +300,11 @@ class NodeIndexer extends AbstractNodeIndexer {
 
     protected function enrichWithFulltextForContentNodes(Node $node, array &$fulltextData, FindChildNodesFilter $filter): void {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
+        $nodeType = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
+        if ($nodeType === null) {
+            return;
+        }
         if ($this->isFulltextEnabled($node)) {
-            $nodeType = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
-
             foreach ($nodeType->getProperties() as $propertyName => $propertyConfiguration) {
                 if (isset($propertyConfiguration['search']['fulltextExtractor'])) {
                     $this->extractFulltext($node, $propertyName, $propertyConfiguration['search']['fulltextExtractor'], $fulltextData);
