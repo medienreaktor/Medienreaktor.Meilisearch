@@ -3,6 +3,11 @@ Neos:
     fusion:
       autoInclude:
         Medienreaktor.Meilisearch: true
+  Flow:
+    mvc:
+      routes:
+        'Medienreaktor.Meilisearch':
+          position: 'before Neos.Neos'
   ContentRepository:
     Search:
       defaultConfigurationPerType:
