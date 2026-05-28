@@ -15,8 +15,8 @@ This package aims for simplicity and minimal dependencies. It might therefore no
 * ✅ Faceting and snippet highlighting
 * ✅ Geosearch filtering and sorting
 * ✅ Vector Search for semantic search / AI search
-* ✅ JSON suggest endpoint for live-search / type-ahead UIs
 * 🔴 No asset indexing (yet)
+* 🔴 No autocomplete / autosuggest (this is currently not supported by Meilisearch)
 
 ## 🚀 Installation
 
@@ -244,85 +244,6 @@ Neos:
     http:
       baseUri: https://example.com/
 ```
-
-## 🔎 Live-Search Suggest Endpoint
-
-For type-ahead / live-search UIs there's a built-in JSON endpoint that returns a short list of fulltext hits. The package only ships the backend — bring your own UI (Alpine, Vue, React, plain JS, whatever).
-
-The route is registered automatically and gets a public-access privilege out of the box. After installing the package and running `flow nodeindex:build`, the endpoint is available at:
-
-```
-GET /search/suggest.json?q=<term>
-```
-
-### Query parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `q` | string | `''` | The search term. Returns an empty result for queries shorter than `minChars`. |
-| `limit` | int | `8` | Number of hits to return. Clamped to `1..20`. |
-| `minChars` | int | `2` | Minimum query length below which the endpoint short-circuits to an empty result. |
-| `dimensions[<name>]` | string | site default | Content dimension values, e.g. `dimensions[language]=de&dimensions[market]=consumers`. Missing dimensions fall back to the site's default dimension space point. |
-
-### Response shape
-
-```json
-{
-  "query": "fern",
-  "totalHits": 12,
-  "hits": [
-    {
-      "aggregateId": "5d6c0d…",
-      "title": "Fernwärme",
-      "uri": "https://example.com/de/energie/fernwaerme",
-      "nodeType": "Medienreaktor.Site:Document.Page",
-      "snippet": "<em>Fern</em>wärme aus dem örtlichen Heizkraftwerk …"
-    }
-  ]
-}
-```
-
-* `snippet` is composed from the highlighted `__fulltext.h1` / `h2` / `text` buckets, joined with `…`. Highlight tags default to `<em>`.
-* `uri` is the absolute or relative node URI (see [Image URIs](#3-image-uris) note about `baseUri`).
-* `totalHits` is Meilisearch's `estimatedTotalHits` (good enough for a "show all" hint, not authoritative).
-
-### Frontend example (Alpine.js)
-
-```js
-Alpine.data('liveSearch', () => ({
-    q: '', hits: [], open: false,
-    async fetch() {
-        if (this.q.trim().length < 2) { this.hits = []; this.open = false; return }
-        const url = new URL('/search/suggest.json', location.origin)
-        url.searchParams.set('q', this.q.trim())
-        url.searchParams.set('dimensions[language]', 'de')
-        const data = await (await fetch(url, { headers: { Accept: 'application/json' }})).json()
-        this.hits = data.hits
-        this.open = true
-    }
-}))
-```
-
-```html
-<div x-data="liveSearch">
-    <input x-model="q" x-on:input.debounce.200ms="fetch()">
-    <ul x-show="open">
-        <template x-for="hit in hits">
-            <li><a x-bind:href="hit.uri" x-text="hit.title"></a></li>
-        </template>
-    </ul>
-</div>
-```
-
-### Customizing the endpoint
-
-The controller is `Medienreaktor\Meilisearch\Controller\SuggestController`. Sub-class it if you need to:
-
-* filter by a different NodeType (default: `Neos.Neos:Document`)
-* return additional properties per hit (override `formatHit()`)
-* change which `__fulltext.*` buckets are highlighted
-
-Then re-route via your own `Routes.yaml` or replace the implementation via the Flow objects configuration.
 
 ## 📍 Geosearch
 

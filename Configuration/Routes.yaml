@@ -1,9 +1,0 @@
--
-  name: 'Medienreaktor.Meilisearch :: Suggest'
-  uriPattern: 'search/suggest(.{@format})'
-  defaults:
-    '@package': 'Medienreaktor.Meilisearch'
-    '@controller': 'Suggest'
-    '@action': 'suggest'
-    '@format': 'json'
-  httpMethods: ['GET']
