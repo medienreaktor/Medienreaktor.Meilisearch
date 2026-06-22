@@ -22,12 +22,6 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
     protected $dimensionsService;
 
     /**
-     * @Flow\InjectConfiguration(path="indexName", package="Medienreaktor.Meilisearch")
-     * @var string
-     */
-    protected $indexName = '';
-
-    /**
      * @Flow\InjectConfiguration(path="client", package="Medienreaktor.Meilisearch")
      * @var array
      */
@@ -44,15 +38,15 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
      *
      * @param NodeInterface $siteNode
      * @param array<string, mixed> $dimensions
-     * @param string|null $indexName
+     * @param string $indexName
      * @param integer|null $expiresIn
      * @param array<int, string> $additionalFilters
      * @return string
      */
     public function tenantToken(
         NodeInterface $siteNode,
-        array $dimensions = [],
-        ?string $indexName = null,
+        array $dimensions,
+        string $indexName,
         ?int $expiresIn = null,
         array $additionalFilters = []
     ): string {
@@ -63,7 +57,6 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
             return '';
         }
 
-        $indexName = $indexName ?: $this->indexName;
         if ($indexName === '') {
             return '';
         }
@@ -90,18 +83,16 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
      *
      * @param NodeInterface $siteNode
      * @param array<string, mixed> $dimensions
-     * @param string|null $indexName
+     * @param string $indexName
      * @param array<int, string> $additionalFilters
      * @return array<string, array<string, string>>
      */
     public function searchRules(
         NodeInterface $siteNode,
-        array $dimensions = [],
-        ?string $indexName = null,
+        array $dimensions,
+        string $indexName,
         array $additionalFilters = []
     ): array {
-        $indexName = $indexName ?: $this->indexName;
-
         return [
             $indexName => [
                 'filter' => $this->frontendFilter($siteNode, $dimensions, $additionalFilters),
