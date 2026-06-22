@@ -12,13 +12,22 @@ Neos:
         Json: Neos\Eel\Helper\JsonHelper
         AssetUri: Medienreaktor\Meilisearch\Eel\AssetUriHelper
         Dimensions: Medienreaktor\Meilisearch\Eel\DimensionsHelper
+  Fusion:
+    defaultContext:
+      Dimensions: Medienreaktor\Meilisearch\Eel\DimensionsHelper
+      Meilisearch: Medienreaktor\Meilisearch\Eel\MeilisearchHelper
 Medienreaktor:
   Meilisearch:
+    indexName: ''
     enableFulltext: true
     neededAttributesForIndex: []
     client:
       endpoint: ''
       apiKey: ''
+      readonlyApiKey: ''
+      readonlyApiKeyUid: ''
+    tenantToken:
+      expiresIn: 3600
     settings:
       displayedAttributes:
         - '*'
