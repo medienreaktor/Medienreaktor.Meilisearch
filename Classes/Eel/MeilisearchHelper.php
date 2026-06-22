@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Eel;
@@ -69,13 +70,18 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
 
         $client = new Client($this->getClientEndpoint(), $apiKey);
 
+        $tokenOptions = [
+            'apiKey' => $apiKey,
+        ];
+        $effectiveExpiresIn = $expiresIn ?? $this->getTenantTokenExpiresIn();
+        if ($effectiveExpiresIn > 0) {
+            $tokenOptions['expiresAt'] = new \DateTimeImmutable('+' . $effectiveExpiresIn . ' seconds');
+        }
+
         return $client->generateTenantToken(
             $apiKeyUid,
             $this->searchRules($siteNode, $dimensions, $indexName, $additionalFilters),
-            [
-                'apiKey' => $apiKey,
-                'expiresAt' => new \DateTimeImmutable('+' . ($expiresIn ?? $this->getTenantTokenExpiresIn()) . ' seconds'),
-            ]
+            $tokenOptions
         );
     }
 
@@ -146,8 +152,8 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
 
     private function getTenantTokenExpiresIn(): int
     {
-        $expiresIn = (int)($this->tenantTokenSettings['expiresIn'] ?? 3600);
-        return $expiresIn > 0 ? $expiresIn : 3600;
+        $expiresIn = (int)($this->tenantTokenSettings['expiresIn'] ?? 0);
+        return $expiresIn > 0 ? $expiresIn : 0;
     }
 
     private function getClientEndpoint(): string

@@ -27,7 +27,7 @@ Medienreaktor:
       readonlyApiKey: ''
       readonlyApiKeyUid: ''
     tenantToken:
-      expiresIn: 3600
+      expiresIn: 0
     settings:
       displayedAttributes:
         - '*'
