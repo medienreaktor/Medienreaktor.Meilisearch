@@ -38,7 +38,7 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
      *
      * @param NodeInterface $siteNode
      * @param array<string, mixed> $dimensions
-     * @param string $indexName
+     * @param string $indexName Meilisearch index name. The package default value is `neos`.
      * @param integer|null $expiresIn
      * @param array<int, string> $additionalFilters
      * @return string
@@ -83,7 +83,7 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
      *
      * @param NodeInterface $siteNode
      * @param array<string, mixed> $dimensions
-     * @param string $indexName
+     * @param string $indexName Meilisearch index name. The package default value is `neos`.
      * @param array<int, string> $additionalFilters
      * @return array<string, array<string, string>>
      */
