@@ -209,7 +209,7 @@ The search query builder supports the following features:
 
 If you want to build your frontend with JavaScript, React or Vue, you can completely ignore above Neos and Fusion integration and use `instant-meilisearch`.
 
-Please mind these three things:
+Please mind these things:
 
 ### 1. Filtering for node context and dimensions
 
@@ -231,7 +231,54 @@ nodePath = ${site.path}
 dimensionsHash = ${Dimensions.hash(site.context.dimensions)}
 ```
 
-### 2. The node URI
+### 2. Frontend tenant tokens
+
+For browser-based search, prefer a Meilisearch tenant token over exposing a plain search key. The `Meilisearch` Eel helper is available in Fusion and can generate a token scoped to the current site node, content dimensions and visibility flags:
+
+```fusion
+searchConfig = Neos.Fusion:DataStructure {
+    host = ${Configuration.setting('Medienreaktor.Meilisearch.client.endpoint')}
+    indexName = 'neos'
+    apiKey = ${Meilisearch.tenantToken(site, site.context.dimensions, 'neos')}
+}
+```
+
+The third argument is the Meilisearch index name. The package default index name is `neos`; pass your project-specific index name if you use a different one.
+
+The generated token enforces this filter:
+
+```text
+(__parentPath = "$siteNodePath" OR __path = "$siteNodePath") AND __dimensionsHash = "$dimensionsHash" AND _hidden = false AND _hiddenInIndex = false
+```
+
+Configure a Meilisearch search key and its key UID for token generation:
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    client:
+      endpoint: 'https://your-meilisearch-instance'
+      readonlyApiKey: '%env:MEILISEARCH_SEARCH_API_KEY%'
+      readonlyApiKeyUid: '%env:MEILISEARCH_SEARCH_API_KEY_UID%'
+    tenantToken:
+      expiresIn: 0
+```
+
+`tenantToken.expiresIn: 0` is the default and creates a token without an expiry claim. This is useful when the token is rendered through cached Fusion output. Set a positive value in seconds only if your rendered frontend configuration is not cached beyond that token lifetime.
+
+You can pass additional Meilisearch filter expressions as the fifth argument:
+
+```fusion
+apiKey = ${Meilisearch.tenantToken(site, site.context.dimensions, 'neos', null, ['__nodeType = "Neos.Neos:Document"'])}
+```
+
+If you only need the filter string and manage the key yourself, use:
+
+```fusion
+filter = ${Meilisearch.frontendFilter(site, site.context.dimensions)}
+```
+
+### 3. The node URI
 
 The public URI to the node is in the `__uri` attribute of each Meilisearch result hit.
 
@@ -239,7 +286,7 @@ It is generated at indexing time and one reason we create separate index records
 
 If you have assigned a primary domain to your site, the URI will be absolute, otherwise relative.
 
-### 3. Image URIs
+### 4. Image URIs
 
 If you need image URIs in your frontend, this can also be configured.
 
