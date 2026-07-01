@@ -59,21 +59,8 @@ class AssetUriHelper implements ProtectedContextAwareInterface
             return null;
         }
 
-        // If no baseUri is set, we create async thumbnails
-        $async = !$this->baseUri;
-        $thumbnailConfiguration = new ThumbnailConfiguration($width, $width, $height, $height, $allowCropping, $allowUpScaling, $async, null, $format);
-
-        if ($async) {
-            $thumbnailImage = $this->thumbnailService->getThumbnail($value, $thumbnailConfiguration);
-            if ($thumbnailImage instanceof Thumbnail) {
-                $request = $this->requestService->createActionRequest();
-                $this->uriBuilder->setRequest($request->getMainRequest());
-                $uri = $this->uriBuilder
-                        ->reset()
-                        ->setCreateAbsoluteUri(false)
-                        ->uriFor('thumbnail', ['thumbnail' => $thumbnailImage], 'Thumbnail', 'Neos.Media');
-                return $uri ?: null;
-            }
+        $identifier = $this->persistenceManager->getIdentifierByObject($value);
+        if ($identifier === null) {
             return null;
         }
 
