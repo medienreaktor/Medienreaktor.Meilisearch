@@ -12,6 +12,10 @@ Neos:
         Json: Neos\Eel\Helper\JsonHelper
         AssetUri: Medienreaktor\Meilisearch\Eel\AssetUriHelper
         Dimensions: Medienreaktor\Meilisearch\Eel\DimensionsHelper
+  Fusion:
+    defaultContext:
+      Dimensions: Medienreaktor\Meilisearch\Eel\DimensionsHelper
+      Meilisearch: Medienreaktor\Meilisearch\Eel\MeilisearchHelper
 Medienreaktor:
   Meilisearch:
     enableFulltext: true
@@ -19,6 +23,10 @@ Medienreaktor:
     client:
       endpoint: ''
       apiKey: ''
+      readonlyApiKey: ''
+      readonlyApiKeyUid: ''
+    tenantToken:
+      expiresIn: 0
     settings:
       displayedAttributes:
         - '*'
