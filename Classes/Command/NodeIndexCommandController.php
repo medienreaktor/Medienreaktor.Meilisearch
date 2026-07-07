@@ -67,6 +67,7 @@ class NodeIndexCommandController extends CommandController {
      * @throws Exception
      */
     public function buildCommand(?int $limit = null): void {
+        $startTime = microtime(true);
         $this->indexClient->createIndex();
 
         $contentRepositoryId = ContentRepositoryId::fromString('default');
@@ -77,7 +78,7 @@ class NodeIndexCommandController extends CommandController {
         $this->indexedNodes = $this->workspaceIndexer->index($contentRepositoryId, $workspace->workspaceName, limit: $limit, singleCallback: fn() => $this->output->progressAdvance());
         $this->output->progressFinish();
 
-        $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes.');
+        $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes in ' . round(microtime(true) - $startTime, 1) . 's.');
     }
 
     /**
@@ -92,6 +93,7 @@ class NodeIndexCommandController extends CommandController {
      * @throws Exception
      */
     public function rebuildCommand(?int $limit = null, bool $skipRemoval = true): void {
+        $startTime = microtime(true);
         $contentRepositoryId = ContentRepositoryId::fromString('default');
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $workspace = $contentRepository->findWorkspaceByName(WorkspaceName::forLive());
@@ -118,7 +120,7 @@ class NodeIndexCommandController extends CommandController {
         if ($limit !== null) {
             $this->outputLine('<comment>--limit was set: the live index now holds only a PARTIAL set. Run without --limit for a full index.</comment>');
         }
-        $this->outputLine('Finished zero-downtime rebuild — indexed ' . $this->indexedNodes . ' nodes and swapped the index.');
+        $this->outputLine('Finished zero-downtime rebuild — indexed ' . $this->indexedNodes . ' nodes and swapped the index in ' . round(microtime(true) - $startTime, 1) . 's.');
     }
 
     /**
