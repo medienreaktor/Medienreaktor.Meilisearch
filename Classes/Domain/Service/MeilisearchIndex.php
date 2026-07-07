@@ -54,6 +54,70 @@ class MeilisearchIndex implements IndexInterface {
         $this->index = $this->client->index($this->indexName);
     }
 
+    protected function targetIndex(?string $targetIndexName): Indexes {
+        return $targetIndexName !== null ? $this->client->index($targetIndexName) : $this->index;
+    }
+
+    /**
+     * Create a fresh, fully-configured build index for a zero-downtime rebuild
+     * and return its name. Index into it via addDocuments($docs, $name), then
+     * hand the name to swapBuildIndex().
+     *
+     * The setup tasks are awaited: if documents arrived before the primary key /
+     * settings were applied, Meilisearch could infer a wrong key or drop them.
+     */
+    public function createBuildIndex(): string {
+        $buildIndexName = $this->indexName . '-build';
+
+        // Drop a possible leftover build index from an aborted previous run.
+        try {
+            $this->client->waitForTask($this->client->deleteIndex($buildIndexName)['taskUid']);
+        } catch (\Throwable $e) {
+        }
+
+        $this->client->waitForTask($this->client->createIndex($buildIndexName)['taskUid']);
+        $buildIndex = $this->client->index($buildIndexName);
+        $this->client->waitForTask($buildIndex->update(['primaryKey' => 'id'])['taskUid']);
+        $this->client->waitForTask($buildIndex->updateSettings($this->indexSettings)['taskUid']);
+
+        return $buildIndexName;
+    }
+
+    /**
+     * Atomically swap a freshly-built index into the live index (native
+     * Meilisearch swap), then drop the old data. Aborts — leaving live
+     * untouched — if the build index is empty, so a broken build can never
+     * wipe search.
+     */
+    public function swapBuildIndex(string $buildIndexName): void {
+        $builtDocuments = $this->client->index($buildIndexName)->stats()['numberOfDocuments'] ?? 0;
+        if ($builtDocuments < 1) {
+            throw new Exception('Zero-downtime rebuild aborted: build index "' . $buildIndexName . '" is empty — live index left untouched.');
+        }
+
+        // Make sure the live index exists so the swap has two indexes.
+        try {
+            $this->client->waitForTask($this->client->createIndex($this->indexName)['taskUid']);
+        } catch (\Throwable $e) {
+        }
+
+        // Client::swapIndexes() wraps each pair in ['indexes' => ...] itself,
+        // so we pass the bare [live, build] pair — not a pre-wrapped payload.
+        $task = $this->client->swapIndexes([[$this->indexName, $buildIndexName]]);
+        $this->client->waitForTask($task['taskUid']);
+        $this->client->deleteIndex($buildIndexName);
+    }
+
+    /**
+     * Discard a build index (error cleanup); live is left untouched.
+     */
+    public function deleteBuildIndex(string $buildIndexName): void {
+        try {
+            $this->client->deleteIndex($buildIndexName);
+        } catch (\Throwable $e) {
+        }
+    }
+
     public function createIndex(): void {
         $this->client->createIndex($this->indexName);
         $this->index->updateSettings($this->indexSettings);
@@ -62,12 +126,14 @@ class MeilisearchIndex implements IndexInterface {
 
     /**
      * @param array $documents Documents to add to the index
+     * @param string|null $targetIndexName Write to this index instead of the live one (rebuild)
      * @return void
      * @throws TimeOutException
      */
-    public function addDocuments(array $documents): void {
-        $task = $this->index->addDocuments($documents);
-        $result = $this->index->waitForTask($task['taskUid']);
+    public function addDocuments(array $documents, ?string $targetIndexName = null): void {
+        $index = $this->targetIndex($targetIndexName);
+        $task = $index->addDocuments($documents);
+        $result = $index->waitForTask($task['taskUid']);
         if ($result['status'] !== 'succeeded') {
             throw new Exception('Meilisearch index update failed: ' . $result['error']['message']);
         }
@@ -75,10 +141,11 @@ class MeilisearchIndex implements IndexInterface {
 
     /**
      * @param array $documents Documents to delete from the index
+     * @param string|null $targetIndexName Delete from this index instead of the live one
      * @return void
      */
-    public function deleteDocuments(array $documents): void {
-        $this->index->deleteDocuments($documents);
+    public function deleteDocuments(array $documents, ?string $targetIndexName = null): void {
+        $this->targetIndex($targetIndexName)->deleteDocuments($documents);
     }
 
     /**
@@ -92,11 +159,12 @@ class MeilisearchIndex implements IndexInterface {
      * Delete documents matching the given Meilisearch filter expression.
      *
      * @param array<int,string>|string $filter
+     * @param string|null $targetIndexName Delete from this index instead of the live one
      * @return void
      */
-    public function deleteByFilter(array|string $filter): void {
+    public function deleteByFilter(array|string $filter, ?string $targetIndexName = null): void {
         $filterString = is_array($filter) ? implode(' AND ', $filter) : $filter;
-        $this->index->deleteDocuments(['filter' => $filterString]);
+        $this->targetIndex($targetIndexName)->deleteDocuments(['filter' => $filterString]);
     }
 
     /**

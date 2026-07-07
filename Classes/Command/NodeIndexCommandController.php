@@ -60,26 +60,65 @@ class NodeIndexCommandController extends CommandController {
     }
 
     /**
-     * Index all nodes.
+     * Index all nodes in-place into the live index.
      *
+     * @param int|null $limit Only index up to this many nodes per dimension (for quick testing)
      * @return void
      * @throws Exception
      */
-    public function buildCommand(): void {
+    public function buildCommand(?int $limit = null): void {
         $this->indexClient->createIndex();
 
         $contentRepositoryId = ContentRepositoryId::fromString('default');
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $workspace = $contentRepository->findWorkspaceByName(WorkspaceName::forLive());
 
-        $contentGraph = $contentRepository->getContentGraph($workspace->workspaceName);
-        $rootNodeAggregate = $contentGraph->findRootNodeAggregateByType(NodeTypeName::fromString('Neos.Neos:Sites'));
-
-
-        $this->output->progressStart();
-        $this->indexedNodes = $this->workspaceIndexer->index($contentRepositoryId, $workspace->workspaceName, singleCallback: fn() => $this->output->progressAdvance());
+        $this->output->progressStart($this->progressMax($contentRepositoryId, $workspace->workspaceName, $limit));
+        $this->indexedNodes = $this->workspaceIndexer->index($contentRepositoryId, $workspace->workspaceName, limit: $limit, singleCallback: fn() => $this->output->progressAdvance());
+        $this->output->progressFinish();
 
         $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes.');
+    }
+
+    /**
+     * Zero-downtime reindex: build into a fresh temporary index, then atomically
+     * swap it live. The current index keeps serving complete results the whole
+     * time — no gap, no half-built state. On error the temp index is discarded
+     * and the live index stays untouched.
+     *
+     * @param int|null $limit Only index up to this many nodes per dimension (testing — produces a PARTIAL live index)
+     * @param bool $skipRemoval Skip the per-node delete (safe: the build index is fresh/empty). Disable to benchmark its cost.
+     * @return void
+     * @throws Exception
+     */
+    public function rebuildCommand(?int $limit = null, bool $skipRemoval = true): void {
+        $contentRepositoryId = ContentRepositoryId::fromString('default');
+        $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
+        $workspace = $contentRepository->findWorkspaceByName(WorkspaceName::forLive());
+
+        $buildIndexName = $this->indexClient->createBuildIndex();
+        $this->output->progressStart($this->progressMax($contentRepositoryId, $workspace->workspaceName, $limit));
+        try {
+            $this->indexedNodes = $this->workspaceIndexer->index(
+                $contentRepositoryId,
+                $workspace->workspaceName,
+                limit: $limit,
+                singleCallback: fn() => $this->output->progressAdvance(),
+                skipRemoval: $skipRemoval,
+                targetIndexName: $buildIndexName
+            );
+            $this->output->progressFinish();
+            $this->indexClient->swapBuildIndex($buildIndexName);
+        } catch (\Throwable $e) {
+            $this->indexClient->deleteBuildIndex($buildIndexName);
+            throw $e;
+        }
+
+        $this->outputLine('');
+        if ($limit !== null) {
+            $this->outputLine('<comment>--limit was set: the live index now holds only a PARTIAL set. Run without --limit for a full index.</comment>');
+        }
+        $this->outputLine('Finished zero-downtime rebuild — indexed ' . $this->indexedNodes . ' nodes and swapped the index.');
     }
 
     /**
@@ -88,6 +127,19 @@ class NodeIndexCommandController extends CommandController {
     public function flushCommand(): void {
         $this->indexClient->deleteAllDocuments();
         $this->outputLine('All documents flushed from the index.');
+    }
+
+    /**
+     * Number of progress steps to expect. The indexer visits every node once per
+     * dimension, and $limit caps the count per dimension — so the total advances
+     * are $limit times the number of dimensions.
+     */
+    protected function progressMax(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, ?int $limit): int {
+        if ($limit === null) {
+            return $this->workspaceIndexer->count($contentRepositoryId, $workspaceName);
+        }
+        $dimensionSpacePoints = $this->contentRepositoryRegistry->get($contentRepositoryId)->getVariationGraph()->getDimensionSpacePoints();
+        return $limit * max(1, $dimensionSpacePoints->count());
     }
 
     /**

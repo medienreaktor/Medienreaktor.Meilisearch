@@ -14,6 +14,7 @@ namespace Medienreaktor\Meilisearch\Indexer;
  */
 
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\CountDescendantNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindDescendantNodesFilter;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
@@ -52,21 +53,45 @@ final class WorkspaceIndexer
      * @param callable $callback
      * @return integer
      */
-    public function index(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, $limit = null, ?callable $callback = null, ?callable $singleCallback = null): int
+    public function index(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int
     {
         $count = 0;
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $dimensionSpacePoints = $contentRepository->getVariationGraph()->getDimensionSpacePoints();
 
         if ($dimensionSpacePoints->isEmpty()) {
-            $count += $this->indexWithDimensions($contentRepositoryId, $workspaceName, DimensionSpacePoint::createWithoutDimensions(), $limit, $callback, $singleCallback);
+            $count += $this->indexWithDimensions($contentRepositoryId, $workspaceName, DimensionSpacePoint::createWithoutDimensions(), $limit, $callback, $singleCallback, $skipRemoval, $targetIndexName);
         } else {
             foreach ($dimensionSpacePoints as $dimensionSpacePoint) {
-                $count += $this->indexWithDimensions($contentRepositoryId, $workspaceName, $dimensionSpacePoint, $limit, $callback, $singleCallback);
+                $count += $this->indexWithDimensions($contentRepositoryId, $workspaceName, $dimensionSpacePoint, $limit, $callback, $singleCallback, $skipRemoval, $targetIndexName);
             }
         }
 
         return $count;
+    }
+
+    /**
+     * Counts how many nodes index() would visit (all descendants of the sites
+     * root across all dimensions). Cheap SQL COUNT, no nodes are materialised —
+     * used to give the build a determinate progress bar.
+     */
+    public function count(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName): int
+    {
+        $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
+        $dimensionSpacePoints = $contentRepository->getVariationGraph()->getDimensionSpacePoints();
+        $dimensionSpacePoints = $dimensionSpacePoints->isEmpty()
+            ? [DimensionSpacePoint::createWithoutDimensions()]
+            : $dimensionSpacePoints;
+
+        $contentGraph = $contentRepository->getContentGraph($workspaceName);
+        $rootNodeAggregate = $contentGraph->findRootNodeAggregateByType(NodeTypeNameFactory::forSites());
+
+        $total = 0;
+        foreach ($dimensionSpacePoints as $dimensionSpacePoint) {
+            $subgraph = $contentGraph->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved());
+            $total += $subgraph->countDescendantNodes($rootNodeAggregate->nodeAggregateId, CountDescendantNodesFilter::create());
+        }
+        return $total;
     }
 
     /**
@@ -76,7 +101,7 @@ final class WorkspaceIndexer
      * @param callable $callback
      * @return int
      */
-    public function indexWithDimensions(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint, ?int $limit = null, ?callable $callback = null, ?callable $singleCallback = null): int
+    public function indexWithDimensions(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint, ?int $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int
     {
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $contentGraph = $contentRepository->getContentGraph($workspaceName);
@@ -87,7 +112,7 @@ final class WorkspaceIndexer
         $rootNode = $subgraph->findNodeById($rootNodeAggregate->nodeAggregateId);
         $indexedNodes = 0;
 
-        $this->nodeIndexer->indexSingleNode($rootNode);
+        $this->nodeIndexer->indexSingleNode($rootNode, $skipRemoval, $targetIndexName);
         $indexedNodes++;
 
         foreach ($subgraph->findDescendantNodes($rootNode->aggregateId, FindDescendantNodesFilter::create()) as $descendantNode) {
@@ -95,7 +120,7 @@ final class WorkspaceIndexer
                 break;
             }
 
-            $this->nodeIndexer->indexSingleNode($descendantNode);
+            $this->nodeIndexer->indexSingleNode($descendantNode, $skipRemoval, $targetIndexName);
             $indexedNodes++;
             if ($singleCallback !== null) {
                 $singleCallback($workspaceName, $indexedNodes, $dimensionSpacePoint);
@@ -103,7 +128,7 @@ final class WorkspaceIndexer
 
         };
 
-        $this->nodeIndexer->flush();
+        $this->nodeIndexer->flush($targetIndexName);
 
         if ($callback !== null) {
             $callback($workspaceName, $indexedNodes, $dimensionSpacePoint);
