@@ -13,9 +13,12 @@ namespace Medienreaktor\Meilisearch\Indexer;
  * source code.
  */
 
+use Neos\ContentRepository\Core\ContentRepository;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
+use Neos\ContentRepository\Core\NodeType\NodeTypeNames;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\CountDescendantNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindDescendantNodesFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\NodeType\NodeTypeCriteria;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepository\Search\Indexer\NodeIndexingManager;
@@ -29,8 +32,7 @@ use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
  *
  * @Flow\Scope("singleton")
  */
-final class WorkspaceIndexer
-{
+final class WorkspaceIndexer {
     /**
      * @var NodeIndexingManager
      * @Flow\Inject
@@ -48,13 +50,19 @@ final class WorkspaceIndexer
     protected ContentRepositoryRegistry $contentRepositoryRegistry;
 
     /**
+     * Lazily computed once per run (singleton): the node type criteria matching
+     * all fulltext roots. Iterating the node types on every dimension would be
+     * wasteful.
+     */
+    private ?NodeTypeCriteria $fulltextRootCriteria = null;
+
+    /**
      * @param string $workspaceName
      * @param integer $limit
      * @param callable $callback
      * @return integer
      */
-    public function index(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int
-    {
+    public function index(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int {
         $count = 0;
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $dimensionSpacePoints = $contentRepository->getVariationGraph()->getDimensionSpacePoints();
@@ -75,8 +83,7 @@ final class WorkspaceIndexer
      * root across all dimensions). Cheap SQL COUNT, no nodes are materialised —
      * used to give the build a determinate progress bar.
      */
-    public function count(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName): int
-    {
+    public function count(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName): int {
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $dimensionSpacePoints = $contentRepository->getVariationGraph()->getDimensionSpacePoints();
         $dimensionSpacePoints = $dimensionSpacePoints->isEmpty()
@@ -86,12 +93,33 @@ final class WorkspaceIndexer
         $contentGraph = $contentRepository->getContentGraph($workspaceName);
         $rootNodeAggregate = $contentGraph->findRootNodeAggregateByType(NodeTypeNameFactory::forSites());
 
+        $rootNodeTypeCriteria = $this->fulltextRootNodeTypeCriteria($contentRepository);
         $total = 0;
         foreach ($dimensionSpacePoints as $dimensionSpacePoint) {
             $subgraph = $contentGraph->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved());
-            $total += $subgraph->countDescendantNodes($rootNodeAggregate->nodeAggregateId, CountDescendantNodesFilter::create());
+            $total += $subgraph->countDescendantNodes($rootNodeAggregate->nodeAggregateId, CountDescendantNodesFilter::create(nodeTypes: $rootNodeTypeCriteria));
         }
         return $total;
+    }
+
+    /**
+     * Node type criteria matching every fulltext root (search.fulltext.isRoot).
+     * We only iterate those: each becomes one search document, and their content
+     * descendants' fulltext is collected during extraction — so visiting the
+     * content nodes themselves would just re-extract the same document.
+     */
+    protected function fulltextRootNodeTypeCriteria(ContentRepository $contentRepository): NodeTypeCriteria {
+        if ($this->fulltextRootCriteria !== null) {
+            return $this->fulltextRootCriteria;
+        }
+        $rootNodeTypeNames = [];
+        foreach ($contentRepository->getNodeTypeManager()->getNodeTypes(false) as $nodeType) {
+            $search = $nodeType->getConfiguration('search');
+            if (is_array($search) && ($search['fulltext']['isRoot'] ?? false) === true) {
+                $rootNodeTypeNames[] = $nodeType->name->value;
+            }
+        }
+        return $this->fulltextRootCriteria = NodeTypeCriteria::createWithAllowedNodeTypeNames(NodeTypeNames::fromStringArray($rootNodeTypeNames));
     }
 
     /**
@@ -101,8 +129,7 @@ final class WorkspaceIndexer
      * @param callable $callback
      * @return int
      */
-    public function indexWithDimensions(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint, ?int $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int
-    {
+    public function indexWithDimensions(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint, ?int $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int {
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $contentGraph = $contentRepository->getContentGraph($workspaceName);
 
@@ -115,7 +142,10 @@ final class WorkspaceIndexer
         $this->nodeIndexer->indexSingleNode($rootNode, $skipRemoval, $targetIndexName);
         $indexedNodes++;
 
-        foreach ($subgraph->findDescendantNodes($rootNode->aggregateId, FindDescendantNodesFilter::create()) as $descendantNode) {
+        foreach ($subgraph->findDescendantNodes(
+            $rootNode->aggregateId,
+            FindDescendantNodesFilter::create(nodeTypes: $this->fulltextRootNodeTypeCriteria($contentRepository)))
+                 as $descendantNode) {
             if ($limit !== null && $indexedNodes > $limit) {
                 break;
             }
