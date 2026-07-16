@@ -291,8 +291,21 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
      */
     public function removeNode(NodeInterface $node): void
     {
-        $identifier = $this->generateUniqueNodeIdentifier($this->requireTraversable($node));
-        $this->bufferDocumentDeletion($identifier);
+        $this->removeDocumentByIdentifier($this->generateUniqueNodeIdentifier($this->requireTraversable($node)));
+    }
+
+    /**
+     * Remove a document when its immutable Meilisearch identifier is already known.
+     *
+     * Deferred indexers can persist this identifier while the node still exists
+     * and execute the removal even if its NodeData disappears in the meantime.
+     *
+     * @param string $documentIdentifier
+     * @return void
+     */
+    public function removeDocumentByIdentifier(string $documentIdentifier): void
+    {
+        $this->bufferDocumentDeletion($documentIdentifier);
         $this->flushIfBufferIsFull();
     }
 
