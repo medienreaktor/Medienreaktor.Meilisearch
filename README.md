@@ -268,6 +268,42 @@ Medienreaktor:
 
 `tenantToken.expiresIn: 0` is the default and creates a token without an expiry claim. This is useful when the token is rendered through cached Fusion output. Set a positive value in seconds only if your rendered frontend configuration is not cached beyond that token lifetime.
 
+### Scheduled visibility reconciliation (opt in)
+
+The default indexing behaviour remains snapshot-based: `nodeindex:build` and
+normal node indexing only write content which is visible at that moment. No
+background process is enabled by this package.
+
+If content using `hiddenBeforeDateTime` or `hiddenAfterDateTime` must enter and
+leave the search index at those boundaries, enable the reconciliation command:
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    scheduledVisibilityReconciliation:
+      enabled: true
+      lookbackSeconds: 3600
+```
+
+Preview the initial reconciliation, then apply it:
+
+```bash
+./flow scheduledvisibility:reconcile --all --dry-run
+./flow scheduledvisibility:reconcile --all
+```
+
+Afterwards, invoke `scheduledvisibility:reconcile` periodically. The
+lookback should be longer than the invocation interval. The command is
+idempotent; use `--all` to recover after an outage longer than the lookback.
+You can also pass explicit `--since` and `--until` values understood by PHP's
+`DateTimeImmutable`.
+
+The command delegates every operation to Neos'
+`NodeIndexerInterface`. If `CodeQ.Meilisearch.QueueIndexer` is installed and
+live asynchronous indexing is enabled, reconciliation operations are enqueued
+onto its live queue and require the queue worker to be running. Without a queue
+decorator, the same operations execute synchronously.
+
 You can pass additional Meilisearch filter expressions as the fifth argument:
 
 ```fusion
