@@ -129,9 +129,9 @@ class NodeIndexer extends AbstractNodeIndexer
                 // Check if current dimension and all dimensions that fall back to the current nodes dimensions
                 if (in_array($node->getContext()->getDimensions()['language'][0], $combination['language'])) {
                     // delete previously indexed variant with same dimensions
-                    $this->indexClient->deleteByFilter([
-                        '__identifier = "' . $nodeIdentifier . '"',
-                        '__dimensionsHash = "' . $this->dimensionsService->hash($combination) . '"'
+                    $dimensionsHash = $this->dimensionsService->hash($combination);
+                    $this->indexClient->deleteDocuments([
+                        $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash)
                     ]);
                     // Index the new node variant
                     if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
@@ -147,9 +147,8 @@ class NodeIndexer extends AbstractNodeIndexer
                 ? $this->dimensionsService->hash($effectiveDimensions)
                 : $this->dimensionsService->hashByNode($node);
 
-            $this->indexClient->deleteByFilter([
-                '__identifier = "' . $nodeIdentifier . '"',
-                '__dimensionsHash = "' . $dimensionsHash . '"'
+            $this->indexClient->deleteDocuments([
+                $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash)
             ]);
             if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $effectiveDimensions)) {
                 $documents[] = $nodeVariant;
@@ -338,6 +337,11 @@ class NodeIndexer extends AbstractNodeIndexer
             ? $this->dimensionsService->hash($overrideDimensions)
             : $this->dimensionsService->hashByNode($node);
 
+        return $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash);
+    }
+
+    protected function generateDocumentIdentifier(string $nodeIdentifier, string $dimensionsHash): string
+    {
         return $nodeIdentifier . '_' . $dimensionsHash;
     }
 }
