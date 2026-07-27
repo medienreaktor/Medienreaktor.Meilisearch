@@ -115,8 +115,9 @@ class NodeIndexer extends AbstractNodeIndexer
         // For each dimension combination, extract the node variant properties and fulltext
         $dimensionCombinations = $this->dimensionsService->getDimensionCombinationsForIndexing($node);
         if ($indexAllDimensions && $dimensionCombinations !== []) {
-            $allIndexedVariants = $this->indexClient->findAllIdentifiersByIdentifier($nodeIdentifier);
-            $this->indexClient->deleteDocuments($allIndexedVariants);
+            $this->indexClient->deleteByFilter([
+                '__identifier = "' . $nodeIdentifier . '"'
+            ]);
             foreach ($dimensionCombinations as $combination) {
                 if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
                     $documents[] = $nodeVariant;
@@ -128,8 +129,10 @@ class NodeIndexer extends AbstractNodeIndexer
                 // Check if current dimension and all dimensions that fall back to the current nodes dimensions
                 if (in_array($node->getContext()->getDimensions()['language'][0], $combination['language'])) {
                     // delete previously indexed variant with same dimensions
-                    $indexedVariant = $this->indexClient->findAllIdentifiersByIdentifierAndDimensionsHash($nodeIdentifier, $this->dimensionsService->hash($combination));
-                    $this->indexClient->deleteDocuments($indexedVariant);
+                    $this->indexClient->deleteByFilter([
+                        '__identifier = "' . $nodeIdentifier . '"',
+                        '__dimensionsHash = "' . $this->dimensionsService->hash($combination) . '"'
+                    ]);
                     // Index the new node variant
                     if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
                         $documents[] = $nodeVariant;
@@ -144,8 +147,10 @@ class NodeIndexer extends AbstractNodeIndexer
                 ? $this->dimensionsService->hash($effectiveDimensions)
                 : $this->dimensionsService->hashByNode($node);
 
-            $indexedVariant = $this->indexClient->findAllIdentifiersByIdentifierAndDimensionsHash($nodeIdentifier, $dimensionsHash);
-            $this->indexClient->deleteDocuments($indexedVariant);
+            $this->indexClient->deleteByFilter([
+                '__identifier = "' . $nodeIdentifier . '"',
+                '__dimensionsHash = "' . $dimensionsHash . '"'
+            ]);
             if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $effectiveDimensions)) {
                 $documents[] = $nodeVariant;
             }
