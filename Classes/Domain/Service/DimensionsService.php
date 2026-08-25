@@ -31,7 +31,7 @@ class DimensionsService
     protected $contentDimensionCombinator;
 
     /**
-     * @var array
+     * @var array|null
      */
     protected $lastTargetDimensions;
 
