@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Domain\Service;
@@ -17,7 +18,6 @@ use Neos\ContentRepository\Domain\Service\Context;
  */
 class NodeLinkService
 {
-
      /**
      * @Flow\Inject
      * @var LinkingService

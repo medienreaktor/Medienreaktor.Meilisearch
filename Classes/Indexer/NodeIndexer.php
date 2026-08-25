@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Indexer;
@@ -115,7 +116,7 @@ class NodeIndexer extends AbstractNodeIndexer
                     $documents[] = $nodeVariant;
                 }
             }
-        } elseif($indexFallbackDimensions && $dimensionCombinations !== []) {
+        } elseif ($indexFallbackDimensions && $dimensionCombinations !== []) {
             // Index only the current dimension and all dimensions that fall back to the current nodes dimensions.
             foreach ($dimensionCombinations as $combination) {
                 // Check if current dimension and all dimensions that fall back to the current nodes dimensions
@@ -303,6 +304,6 @@ class NodeIndexer extends AbstractNodeIndexer
 
         $dimensionsHash = $this->dimensionsService->hashByNode($node);
 
-        return $nodeIdentifier.'_'.$dimensionsHash;
+        return $nodeIdentifier . '_' . $dimensionsHash;
     }
 }

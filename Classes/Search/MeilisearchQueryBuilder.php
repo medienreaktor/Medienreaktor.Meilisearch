@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Search;
@@ -247,7 +248,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
         $this->parameters['matchingStrategy'] = $matchingStrategy;
         return $this;
     }
-    
+
     /**
      * Setzt the Distinct Attribute.
      * @param string $attribute

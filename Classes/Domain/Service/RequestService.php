@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Domain\Service;
@@ -70,7 +71,6 @@ class RequestService
                 }
             }
         } catch (\Exception $e) {
-
         }
 
         return '';

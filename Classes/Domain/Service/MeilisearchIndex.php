@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Domain\Service;
@@ -82,7 +83,7 @@ class MeilisearchIndex implements IndexInterface
     /**
      * Delete the index.
      */
-    public function deleteIndex() :void
+    public function deleteIndex(): void
     {
         $this->client->deleteIndex($this->indexName);
     }
@@ -150,7 +151,7 @@ class MeilisearchIndex implements IndexInterface
      */
     public function findAllIdentifiersByIdentifier(string $identifier)
     {
-        $results = $this->index->search('', ['filter' => ['__identifier = '.$identifier]]);
+        $results = $this->index->search('', ['filter' => ['__identifier = ' . $identifier]]);
 
         $hits = [];
         foreach ($results->getHits() as $hit) {
