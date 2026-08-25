@@ -87,7 +87,10 @@ class NodeIndexCommandController extends CommandController {
      * time — no gap, no half-built state. On error the temp index is discarded
      * and the live index stays untouched.
      *
-     * @param int|null $limit Only index up to this many nodes per dimension (testing — produces a PARTIAL live index)
+     * Documents written by other indexers into the same index (assets, PDFs) are
+     * copied over before the swap — see the "indexing.preserveOnRebuild" setting.
+     *
+     * @param int|null $limit Only index up to this many nodes per dimension. This builds a partial index, which is never swapped live — for testing the build itself.
      * @param bool $skipRemoval Skip the per-node delete (safe: the build index is fresh/empty). Disable to benchmark its cost.
      * @return void
      * @throws Exception
@@ -110,16 +113,26 @@ class NodeIndexCommandController extends CommandController {
                 targetIndexName: $buildIndexName
             );
             $this->output->progressFinish();
+            $this->outputLine('');
+
+            if ($limit !== null) {
+                // A capped run holds a fraction of the documents. Swapping it would
+                // do exactly what this command exists to prevent: leave the live
+                // index short of most of its content.
+                $this->indexClient->deleteBuildIndex($buildIndexName);
+                $this->outputLine('<comment>--limit was set: built %d nodes into a partial index and discarded it. The live index is untouched — run without --limit to actually rebuild.</comment>', [$this->indexedNodes]);
+                return;
+            }
+
+            foreach ($this->indexClient->preserveDocuments($buildIndexName) as $label => $preserved) {
+                $this->outputLine('Carried over %d "%s" documents from the live index.', [$preserved, $label]);
+            }
             $this->indexClient->swapBuildIndex($buildIndexName);
         } catch (\Throwable $e) {
             $this->indexClient->deleteBuildIndex($buildIndexName);
             throw $e;
         }
 
-        $this->outputLine('');
-        if ($limit !== null) {
-            $this->outputLine('<comment>--limit was set: the live index now holds only a PARTIAL set. Run without --limit for a full index.</comment>');
-        }
         $this->outputLine('Finished zero-downtime rebuild — indexed ' . $this->indexedNodes . ' nodes and swapped the index in ' . round(microtime(true) - $startTime, 1) . 's.');
     }
 
