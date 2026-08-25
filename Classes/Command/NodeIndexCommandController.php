@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Command;
@@ -100,7 +99,7 @@ class NodeIndexCommandController extends CommandController
         foreach ($nodes as $node) {
             try {
                 $this->nodeIndexer->indexNode($node);
-            } catch (NodeException | IndexingException $exception) {
+            } catch (NodeException|IndexingException $exception) {
                 throw new Exception(sprintf('Error during indexing of node %s (%s)', $node->findNodePath(), (string) $node->getNodeAggregateIdentifier()), 1690288327, $exception);
             }
             $this->indexedNodes++;
