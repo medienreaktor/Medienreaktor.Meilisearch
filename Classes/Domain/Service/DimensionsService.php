@@ -70,6 +70,19 @@ class DimensionsService
     }
 
     /**
+     * Whether a dimension combination falls back to this node's own dimensions — that
+     * is, whether content authored for the node shines through into that combination.
+     *
+     * @param array<string, array<int, string>> $nodeDimensions
+     * @param array<string, array<int, string>> $combination
+     * @return bool
+     */
+    public function combinationFallsBackTo(array $nodeDimensions, array $combination): bool
+    {
+        return in_array($nodeDimensions['language'][0], $combination['language']);
+    }
+
+    /**
      * @param NodeInterface $node
      * @return string|null
      */

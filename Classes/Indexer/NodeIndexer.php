@@ -131,7 +131,7 @@ class NodeIndexer extends AbstractNodeIndexer
             // Index only the current dimension and all dimensions that fall back to the current nodes dimensions.
             foreach ($dimensionCombinations as $combination) {
                 // Check if current dimension and all dimensions that fall back to the current nodes dimensions
-                if (in_array($node->getContext()->getDimensions()['language'][0], $combination['language'])) {
+                if ($this->dimensionsService->combinationFallsBackTo($node->getContext()->getDimensions(), $combination)) {
                     // delete previously indexed variant with same dimensions
                     $dimensionsHash = $this->dimensionsService->hash($combination);
                     $this->indexClient->deleteDocuments([
