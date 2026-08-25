@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Kept to the elements PHPUnit 9.6, 10.5 and 11.5 all accept: the CI matrix spans
+    PHP 8.0 to 8.4, and PHPUnit's own floors force a different major at each end.
+    That rules out <source> and cacheDirectory, which are 10+ only.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnRisky="true"
+         failOnWarning="true">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>Tests/Unit</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

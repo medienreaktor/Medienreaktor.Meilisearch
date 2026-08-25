@@ -1,0 +1,11 @@
+includes:
+    - phpstan-baseline.neon
+parameters:
+    level: 5
+    paths:
+        - Classes
+        - Tests
+    # The package declares php ^8.0, so analyse against that floor rather than the
+    # interpreter in use — otherwise 8.2-only syntax passes locally and breaks the
+    # oldest supported target.
+    phpVersion: 80000

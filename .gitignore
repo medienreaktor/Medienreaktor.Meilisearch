@@ -1,2 +1,9 @@
 /.idea
 /.vscode
+/vendor/
+# neos/composer-plugin installs neos-package dependencies here rather than into
+# vendor/, so a standalone `composer install` creates this alongside vendor/.
+/Packages/
+/composer.lock
+/.phpunit.cache/
+/.phpunit.result.cache
