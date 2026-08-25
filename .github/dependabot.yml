@@ -1,0 +1,39 @@
+version: 2
+updates:
+    # ci.yml pins third-party actions by commit SHA, which is the right call for
+    # review but means nothing ever tells us they went stale. This does.
+    - package-ecosystem: "github-actions"
+      directory: "/"
+      schedule:
+          interval: "monthly"
+      # One pull request per run rather than one per action: they are reviewed
+      # together anyway, and a SHA bump carries no independent risk.
+      groups:
+          actions:
+              patterns:
+                  - "*"
+      commit-message:
+          prefix: "ci"
+
+    - package-ecosystem: "composer"
+      directory: "/"
+      schedule:
+          interval: "monthly"
+      # No composer.lock is committed, so every proposal here is a constraint
+      # change. `widen` adds the new range beside the old one instead of raising
+      # the floor, which is what a library wants: raising it would drop consumers
+      # for no reason. Narrowing stays a deliberate release decision.
+      versioning-strategy: widen
+      groups:
+          dev-tooling:
+              dependency-type: "development"
+              patterns:
+                  - "*"
+      commit-message:
+          prefix: "build"
+          prefix-development: "build"
+      ignore:
+          # The Neos range encodes which Neos generations this package supports.
+          # The CI matrix proves that range; moving it is a release decision, not
+          # dependency drift, and 9.x in particular lives on its own branch.
+          - dependency-name: "neos/*"
