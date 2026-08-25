@@ -70,15 +70,15 @@ jobs:
       # Let every version report rather than killing the rest when the first fails.
       fail-fast: false
       matrix:
-        # composer.json advertises php ^8.0 and neos/neos ^7.0 || ^8.0, so both
-        # floors have to be exercised, not just asserted:
+        # composer.json advertises php ^8.0, so the floor is exercised rather than
+        # asserted:
         #
-        #   - `lowest` on 8.0 resolves Neos 7.0 (7.x accepts ^7.3 || ^8.0) together
-        #     with the oldest meilisearch-php and PHPUnit we allow. This is the only
-        #     job that proves the advertised floor; PHP 8.1 already excludes Neos 7,
-        #     because 7.x caps at ^8.0.
-        #   - `highest` walks up to the newest Neos each interpreter permits: 8.0-8.1
-        #     land on Neos 8.3, and 8.2+ on Neos 8.4, which requires PHP >= 8.2.
+        #   - `lowest` on 8.0 pins the oldest installable set: meilisearch-php 1.0,
+        #     PHPUnit 9.6, and Neos 8.3 — not 8.0, because Composer blocks the
+        #     neos/media-browser releases the 8.0-8.2 line depends on over published
+        #     advisories. The declared ^8.0 is therefore wider than what resolves.
+        #   - `highest` walks up to the newest Neos each interpreter permits: 8.0 and
+        #     8.1 land on Neos 8.3, 8.2+ on Neos 8.4, which requires PHP >= 8.2.
         #
         # 8.5 is left out because Neos 8.4 does not support it.
         include:
