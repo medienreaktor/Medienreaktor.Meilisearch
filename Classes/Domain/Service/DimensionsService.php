@@ -16,7 +16,6 @@ namespace Medienreaktor\Meilisearch\Domain\Service;
 
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Service\ContentDimensionCombinator;
-use Neos\ContentRepository\Domain\Service\ContentDimensionPresetSourceInterface;
 use Neos\ContentRepository\Utility;
 use Neos\Flow\Annotations as Flow;
 
@@ -30,12 +29,6 @@ class DimensionsService
      * @var ContentDimensionCombinator
      */
     protected $contentDimensionCombinator;
-
-    /**
-     * @Flow\Inject
-     * @var ContentDimensionPresetSourceInterface
-     */
-    protected $contentDimensionPresetSource;
 
     /**
      * @var array|null
@@ -172,26 +165,11 @@ class DimensionsService
      */
     public function getAllCombinations(): array
     {
-        $dimensionPresets = $this->contentDimensionPresetSource->getAllPresets();
+        $combinations = $this->contentDimensionCombinator->getAllAllowedCombinations();
 
-        if ($dimensionPresets === []) {
-            return [];
-        }
-
-        $combinations = [[]];
-
-        foreach ($dimensionPresets as $dimensionName => $dimensionConfig) {
-            $newCombinations = [];
-            foreach ($combinations as $combination) {
-                foreach ($dimensionConfig['presets'] as $preset) {
-                    $newCombination = $combination;
-                    $newCombination[$dimensionName] = $preset['values'];
-                    $newCombinations[] = $newCombination;
-                }
-            }
-            $combinations = $newCombinations;
-        }
-
-        return $combinations;
+        // A dimensionless site is answered with a single empty combination, while
+        // callers here distinguish "no dimensions at all" from "one combination" — so
+        // keep the empty list the previous implementation returned for that case.
+        return $combinations === [[]] ? [] : $combinations;
     }
 }

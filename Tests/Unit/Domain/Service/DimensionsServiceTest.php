@@ -172,7 +172,6 @@ class DimensionsServiceTest extends TestCase
         $seed = [
             [$combinator, 'contentDimensionPresetSource', $presetSource],
             [$dimensionsService, 'contentDimensionCombinator', $combinator],
-            [$dimensionsService, 'contentDimensionPresetSource', $presetSource],
         ];
         foreach ($seed as [$object, $propertyName, $value]) {
             $property = (new \ReflectionObject($object))->getProperty($propertyName);
@@ -200,5 +199,28 @@ class DimensionsServiceTest extends TestCase
 
         self::assertNotContains(['language' => ['en', 'de'], 'country' => ['at']], $combinations);
         self::assertCount(3, $combinations);
+    }
+
+    /**
+     * The combinator answers a site without dimensions with one empty combination.
+     * Callers read an empty list as "no dimensions", so that is what they get.
+     */
+    public function testAllCombinationsIsEmptyForASiteWithoutDimensions(): void
+    {
+        $presetSource = new ConstrainedPresetSource([]);
+        $combinator = new ContentDimensionCombinator();
+        $dimensionsService = new DimensionsService();
+
+        $seed = [
+            [$combinator, 'contentDimensionPresetSource', $presetSource],
+            [$dimensionsService, 'contentDimensionCombinator', $combinator],
+        ];
+        foreach ($seed as [$object, $name, $value]) {
+            $property = (new \ReflectionObject($object))->getProperty($name);
+            $property->setAccessible(true);
+            $property->setValue($object, $value);
+        }
+
+        self::assertSame([], $dimensionsService->getAllCombinations());
     }
 }
