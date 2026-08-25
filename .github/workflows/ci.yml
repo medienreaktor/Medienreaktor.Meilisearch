@@ -83,7 +83,7 @@ jobs:
         # are exercised rather than asserted:
         #
         #   - `lowest` on 8.0 pins the oldest set the constraints permit, which is
-        #     also the oldest that installs at all: Neos 8.3, meilisearch-php 1.0,
+        #     also the oldest that installs at all: Neos 8.3, meilisearch-php 1.2,
         #     content-repository-search 4.1.2, PHPUnit 9.6.
         #   - `highest` walks up to the newest Neos each interpreter permits: 8.0 and
         #     8.1 land on Neos 8.3, 8.2+ on Neos 8.4, which requires PHP >= 8.2.
