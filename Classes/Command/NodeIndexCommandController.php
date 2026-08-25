@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Command;
 
 use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
+use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Exception;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
@@ -15,7 +16,6 @@ use Neos\ContentRepository\Exception\NodeException;
 use Neos\ContentRepository\Search\Exception\IndexingException;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Cli\CommandController;
-use Neos\Neos\Domain\Service\ContentDimensionPresetSourceInterface;
 
 /**
  * CLI commands for index building and flushing
@@ -44,9 +44,9 @@ class NodeIndexCommandController extends CommandController
 
     /**
      * @Flow\Inject
-     * @var ContentDimensionPresetSourceInterface
+     * @var DimensionsService
      */
-    protected $contentDimensionPresetSource;
+    protected $dimensionsService;
 
     /**
      * @var integer
@@ -88,8 +88,7 @@ class NodeIndexCommandController extends CommandController
     {
         $this->indexClient->createIndex();
 
-        $dimensionPresets = $this->contentDimensionPresetSource->getAllPresets();
-        $dimensionCombinations = $this->buildDimensionCombinations($dimensionPresets);
+        $dimensionCombinations = $this->dimensionsService->getAllCombinations();
 
         $this->outputLine('Collecting indexable nodes...');
         $nodes = [];
@@ -132,35 +131,6 @@ class NodeIndexCommandController extends CommandController
         $this->output->progressFinish();
         $this->outputLine('');
         $this->outputLine('Finished indexing %d nodes.', [$this->indexedNodes]);
-    }
-
-    /**
-     * Build all dimension combinations from presets.
-     *
-     * @param array $dimensionPresets
-     * @return array
-     */
-    protected function buildDimensionCombinations(array $dimensionPresets): array
-    {
-        if ($dimensionPresets === []) {
-            return [];
-        }
-
-        $combinations = [[]];
-
-        foreach ($dimensionPresets as $dimensionName => $dimensionConfig) {
-            $newCombinations = [];
-            foreach ($combinations as $combination) {
-                foreach ($dimensionConfig['presets'] as $preset) {
-                    $newCombination = $combination;
-                    $newCombination[$dimensionName] = $preset['values'];
-                    $newCombinations[] = $newCombination;
-                }
-            }
-            $combinations = $newCombinations;
-        }
-
-        return $combinations;
     }
 
     /**

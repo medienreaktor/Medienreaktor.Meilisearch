@@ -16,6 +16,7 @@ namespace Medienreaktor\Meilisearch\Domain\Service;
 
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Service\ContentDimensionCombinator;
+use Neos\ContentRepository\Domain\Service\ContentDimensionPresetSourceInterface;
 use Neos\ContentRepository\Utility;
 use Neos\Flow\Annotations as Flow;
 
@@ -29,6 +30,12 @@ class DimensionsService
      * @var ContentDimensionCombinator
      */
     protected $contentDimensionCombinator;
+
+    /**
+     * @Flow\Inject
+     * @var ContentDimensionPresetSourceInterface
+     */
+    protected $contentDimensionPresetSource;
 
     /**
      * @var array|null
@@ -156,5 +163,35 @@ class DimensionsService
             }
             return true;
         });
+    }
+
+    /**
+     * Every dimension combination configured for this site.
+     *
+     * @return array<int, array<string, array<int, string>>>
+     */
+    public function getAllCombinations(): array
+    {
+        $dimensionPresets = $this->contentDimensionPresetSource->getAllPresets();
+
+        if ($dimensionPresets === []) {
+            return [];
+        }
+
+        $combinations = [[]];
+
+        foreach ($dimensionPresets as $dimensionName => $dimensionConfig) {
+            $newCombinations = [];
+            foreach ($combinations as $combination) {
+                foreach ($dimensionConfig['presets'] as $preset) {
+                    $newCombination = $combination;
+                    $newCombination[$dimensionName] = $preset['values'];
+                    $newCombinations[] = $newCombination;
+                }
+            }
+            $combinations = $newCombinations;
+        }
+
+        return $combinations;
     }
 }
