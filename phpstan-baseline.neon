@@ -7,18 +7,6 @@ parameters:
 			path: Classes/Command/NodeIndexCommandController.php
 
 		-
-			message: '#^Call to an undefined method Neos\\ContentRepository\\Domain\\Model\\NodeInterface\:\:findNodePath\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: Classes/Command/NodeIndexCommandController.php
-
-		-
-			message: '#^Call to an undefined method Neos\\ContentRepository\\Domain\\Model\\NodeInterface\:\:getNodeAggregateIdentifier\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: Classes/Command/NodeIndexCommandController.php
-
-		-
 			message: '#^Strict comparison using \=\=\= between Neos\\Flow\\ResourceManagement\\PersistentResource and null will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 1
@@ -53,18 +41,6 @@ parameters:
 			identifier: booleanAnd.leftAlwaysTrue
 			count: 1
 			path: Classes/Domain/Service/RequestService.php
-
-		-
-			message: '#^Call to an undefined method Medienreaktor\\Meilisearch\\Domain\\Service\\IndexInterface\:\:findAllIdentifiersByIdentifier\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: Classes/Indexer/NodeIndexer.php
-
-		-
-			message: '#^Call to an undefined method Medienreaktor\\Meilisearch\\Domain\\Service\\IndexInterface\:\:findAllIdentifiersByIdentifierAndDimensionsHash\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: Classes/Indexer/NodeIndexer.php
 
 		-
 			message: '#^Call to an undefined method Neos\\ContentRepository\\Domain\\Model\\NodeInterface\:\:findChildNodes\(\)\.$#'
