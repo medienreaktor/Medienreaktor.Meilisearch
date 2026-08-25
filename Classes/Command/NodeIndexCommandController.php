@@ -85,20 +85,42 @@ class NodeIndexCommandController extends CommandController
     {
         $this->indexClient->createIndex();
 
-        $context = $this->contextFactory->create(['workspaceName' => 'live']);
-        $rootNode = $context->getRootNode();
+        $dimensionPresets = $this->contentDimensionPresetSource->getAllPresets();
+        $dimensionCombinations = $this->buildDimensionCombinations($dimensionPresets);
 
         $this->outputLine('Collecting indexable nodes...');
         $nodes = [];
-        $this->collectNodes($rootNode, $nodes);
+
+        if ($dimensionCombinations === []) {
+            $context = $this->contextFactory->create(['workspaceName' => 'live']);
+            $rootNode = $context->getRootNode();
+            $this->collectNodes($rootNode, $nodes);
+        } else {
+            foreach ($dimensionCombinations as $dimensions) {
+                $context = $this->contextFactory->create([
+                    'workspaceName' => 'live',
+                    'dimensions' => $dimensions
+                ]);
+                $rootNode = $context->getRootNode();
+                $this->collectNodes($rootNode, $nodes, false, false, $dimensions);
+            }
+        }
+
         $total = count($nodes);
 
         $this->outputLine('Indexing %d nodes...', [$total]);
         $this->output->progressStart($total);
 
-        foreach ($nodes as $node) {
+        foreach ($nodes as $nodeToIndex) {
+            $node = $nodeToIndex['node'];
             try {
-                $this->nodeIndexer->indexNode($node);
+                $this->nodeIndexer->indexNode(
+                    $node,
+                    null,
+                    $nodeToIndex['indexAllDimensions'],
+                    $nodeToIndex['indexFallbackDimensions'],
+                    $nodeToIndex['targetDimensionCombination']
+                );
             } catch (NodeException|IndexingException $exception) {
                 throw new Exception(sprintf('Error during indexing of node %s (%s)', $node->findNodePath(), (string) $node->getNodeAggregateIdentifier()), 1690288327, $exception);
             }
@@ -112,20 +134,63 @@ class NodeIndexCommandController extends CommandController
     }
 
     /**
+     * Build all dimension combinations from presets.
+     *
+     * @param array $dimensionPresets
+     * @return array
+     */
+    protected function buildDimensionCombinations(array $dimensionPresets): array
+    {
+        if ($dimensionPresets === []) {
+            return [];
+        }
+
+        $combinations = [[]];
+
+        foreach ($dimensionPresets as $dimensionName => $dimensionConfig) {
+            $newCombinations = [];
+            foreach ($combinations as $combination) {
+                foreach ($dimensionConfig['presets'] as $preset) {
+                    $newCombination = $combination;
+                    $newCombination[$dimensionName] = $preset['values'];
+                    $newCombinations[] = $newCombination;
+                }
+            }
+            $combinations = $newCombinations;
+        }
+
+        return $combinations;
+    }
+
+    /**
      * Recursively collects all fulltext root nodes into a flat array so that
      * the total count is known before indexing begins.
      *
      * @param NodeInterface $currentNode
-     * @param NodeInterface[] $nodes
+     * @param array $nodes
+     * @param bool $indexAllDimensions
+     * @param bool $indexFallbackDimensions
+     * @param array $targetDimensionCombination
      */
-    protected function collectNodes(NodeInterface $currentNode, array &$nodes): void
+    protected function collectNodes(
+        NodeInterface $currentNode,
+        array &$nodes,
+        bool $indexAllDimensions = true,
+        bool $indexFallbackDimensions = true,
+        array $targetDimensionCombination = []
+    ): void
     {
         if (self::isFulltextRoot($currentNode)) {
-            $nodes[] = $currentNode;
+            $nodes[] = [
+                'node' => $currentNode,
+                'indexAllDimensions' => $indexAllDimensions,
+                'indexFallbackDimensions' => $indexFallbackDimensions,
+                'targetDimensionCombination' => $targetDimensionCombination,
+            ];
         }
 
         foreach ($currentNode->findChildNodes() as $childNode) {
-            $this->collectNodes($childNode, $nodes);
+            $this->collectNodes($childNode, $nodes, $indexAllDimensions, $indexFallbackDimensions, $targetDimensionCombination);
         }
     }
 

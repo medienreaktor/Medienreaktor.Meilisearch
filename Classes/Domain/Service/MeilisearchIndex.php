@@ -105,22 +105,16 @@ class MeilisearchIndex implements IndexInterface
     public function deleteByFilter(array $filter): void
     {
         if ($filter === []) {
-            return; // nichts zu löschen
+            return;
         }
 
-        // Falls bereits das erwartete Options-Array übergeben wurde (['filter' => '...']) direkt verwenden
         if (array_key_exists('filter', $filter)) {
             $options = $filter;
         } else {
-            // Liste von Bedingungen (z.B. ['__identifier = 123', '__dimensionsHash = "abc"']) in einen AND-Ausdruck umwandeln
             $options = ['filter' => implode(' AND ', $filter)];
         }
 
-        try {
-            $this->index->deleteDocuments($options);
-        } catch (\Meilisearch\Exceptions\ApiException $e) {
-            // Optional: Logging hier möglich. Still schlucken oder rethrow? Aktuell still, um Verhalten der anderen Methoden zu spiegeln.
-        }
+        $this->index->deleteDocuments($options);
     }
 
     /**

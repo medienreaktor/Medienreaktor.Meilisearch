@@ -84,9 +84,16 @@ class NodeIndexer extends AbstractNodeIndexer
      * @param string $targetWorkspace
      * @param bool $indexAllDimensions
      * @param bool $indexFallbackDimensions Whether to index dimensions that fall back to the current nodes dimensions
+     * @param array $targetDimensionCombination Optional: Force indexing with this dimension combination (for shine-through scenarios)
      * @return void
      */
-    public function indexNode(NodeInterface $node, $targetWorkspace = null, $indexAllDimensions = true, $indexFallbackDimensions = true): void
+    public function indexNode(
+        NodeInterface $node,
+        $targetWorkspace = null,
+        $indexAllDimensions = true,
+        $indexFallbackDimensions = true,
+        array $targetDimensionCombination = []
+    ): void
     {
         // Make sure this is a fulltext root, e.g. Neos.Neos:Document or subtype
         $node = $this->findFulltextRoot($node);
@@ -108,8 +115,9 @@ class NodeIndexer extends AbstractNodeIndexer
         // For each dimension combination, extract the node variant properties and fulltext
         $dimensionCombinations = $this->dimensionsService->getDimensionCombinationsForIndexing($node);
         if ($indexAllDimensions && $dimensionCombinations !== []) {
-            $allIndexedVariants = $this->indexClient->findAllIdentifiersByIdentifier($nodeIdentifier);
-            $this->indexClient->deleteDocuments($allIndexedVariants);
+            $this->indexClient->deleteByFilter([
+                '__identifier = "' . $nodeIdentifier . '"'
+            ]);
             foreach ($dimensionCombinations as $combination) {
                 if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
                     $documents[] = $nodeVariant;
@@ -121,8 +129,10 @@ class NodeIndexer extends AbstractNodeIndexer
                 // Check if current dimension and all dimensions that fall back to the current nodes dimensions
                 if (in_array($node->getContext()->getDimensions()['language'][0], $combination['language'])) {
                     // delete previously indexed variant with same dimensions
-                    $indexedVariant = $this->indexClient->findAllIdentifiersByIdentifierAndDimensionsHash($nodeIdentifier, $this->dimensionsService->hash($combination));
-                    $this->indexClient->deleteDocuments($indexedVariant);
+                    $dimensionsHash = $this->dimensionsService->hash($combination);
+                    $this->indexClient->deleteDocuments([
+                        $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash)
+                    ]);
                     // Index the new node variant
                     if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
                         $documents[] = $nodeVariant;
@@ -131,9 +141,16 @@ class NodeIndexer extends AbstractNodeIndexer
             }
         } else {
             // Index only the current dimension combination without any fallbacks
-            $indexedVariant = $this->indexClient->findAllIdentifiersByIdentifierAndDimensionsHash($nodeIdentifier, $this->dimensionsService->hashByNode($node));
-            $this->indexClient->deleteDocuments($indexedVariant);
-            if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier)) {
+            // Use targetDimensionCombination if provided (for shine-through/fallback scenarios)
+            $effectiveDimensions = $targetDimensionCombination !== [] ? $targetDimensionCombination : [];
+            $dimensionsHash = $effectiveDimensions !== []
+                ? $this->dimensionsService->hash($effectiveDimensions)
+                : $this->dimensionsService->hashByNode($node);
+
+            $this->indexClient->deleteDocuments([
+                $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash)
+            ]);
+            if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $effectiveDimensions)) {
                 $documents[] = $nodeVariant;
             }
         }
@@ -146,7 +163,7 @@ class NodeIndexer extends AbstractNodeIndexer
      * Extract node variant properties and fulltext for a given dimension combination
      *
      * @param string $nodeIdentifier
-     * @param array $dimensionCombination
+     * @param array $dimensionCombination The target dimension combination to index for
      * @return array
      */
     protected function extractNodeVariant(string $nodeIdentifier, array $dimensionCombination = []): ?array
@@ -160,11 +177,23 @@ class NodeIndexer extends AbstractNodeIndexer
         $node = $context->getNodeByIdentifier($nodeIdentifier);
 
         if ($node !== null) {
-            $identifier = $this->generateUniqueNodeIdentifier($node);
+            // Use dimensionCombination for hash when provided (handles fallback/shine-through)
+            // This ensures content visible in English is indexed with English hash even if
+            // the underlying node is German
+            $overrideDimensions = $dimensionCombination !== [] ? $dimensionCombination : null;
+            $identifier = $this->generateUniqueNodeIdentifier($node, $overrideDimensions);
             $fulltext = [];
 
             $document = $this->extractPropertiesAndFulltext($node, $fulltext);
             $document['id'] = $identifier;
+
+            // Override __dimensionsHash with the target dimension hash (not the node's internal dimensions)
+            // This is critical for dimension fallback scenarios where German content appears in English
+            if ($dimensionCombination !== []) {
+                $document['__dimensionsHash'] = $this->dimensionsService->hash($dimensionCombination);
+                $document['__dimensions'] = $dimensionCombination;
+            }
+
             if ($this->enableFulltext) {
                 $document['__fulltext'] = $fulltext;
             }
@@ -295,14 +324,24 @@ class NodeIndexer extends AbstractNodeIndexer
      * Generate identifier for index document based on node identifier and dimensions.
      *
      * @param NodeInterface $node
+     * @param array|null $overrideDimensions Optional dimensions to use instead of node's context dimensions
      * @return string
      */
-    protected function generateUniqueNodeIdentifier(NodeInterface $node): string
+    protected function generateUniqueNodeIdentifier(NodeInterface $node, ?array $overrideDimensions = null): string
     {
         $nodeIdentifier = (string) $node->getNodeAggregateIdentifier();
 
-        $dimensionsHash = $this->dimensionsService->hashByNode($node);
+        // Use override dimensions if provided (for fallback/shine-through scenarios)
+        // Otherwise fall back to node's context target dimensions
+        $dimensionsHash = $overrideDimensions !== null
+            ? $this->dimensionsService->hash($overrideDimensions)
+            : $this->dimensionsService->hashByNode($node);
 
-        return $nodeIdentifier.'_'.$dimensionsHash;
+        return $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash);
+    }
+
+    protected function generateDocumentIdentifier(string $nodeIdentifier, string $dimensionsHash): string
+    {
+        return $nodeIdentifier . '_' . $dimensionsHash;
     }
 }

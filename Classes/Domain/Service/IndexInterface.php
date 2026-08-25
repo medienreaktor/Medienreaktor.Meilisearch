@@ -27,6 +27,12 @@ interface IndexInterface
     public function deleteDocuments(array $documents): void;
 
     /**
+     * @param array $filter Filter conditions or Meilisearch filter options
+     * @return void
+     */
+    public function deleteByFilter(array $filter): void;
+
+    /**
      * Delete all documents from the index.
      *
      * @return void
