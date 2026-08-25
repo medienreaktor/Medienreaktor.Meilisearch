@@ -1,4 +1,4 @@
-name: CI
+name: CI (main)
 
 on:
   push:
@@ -22,12 +22,12 @@ env:
   COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
 
 jobs:
-  # Lint is deliberately not part of the test matrix below. The PHPStan baseline
-  # records errors as they appear against one set of dependencies, so analysing the
-  # same code against several would either fail on unmatched baseline entries or
-  # need reportUnmatchedIgnoredErrors disabled — which would blunt the baseline for
-  # the one configuration that matters. Style and static analysis do not vary by
-  # PHP version here, so one authoritative run is enough.
+  # Lint is deliberately not part of the test matrix below: style and static
+  # analysis do not vary by PHP version here, so one authoritative run is enough.
+  #
+  # There is deliberately no PHPStan baseline in this repository, and no composer
+  # script to generate one. An error the analysis reports is work to do, not debt to
+  # be silenced in a single command.
   lint:
     name: Lint (PHP 8.3, highest deps)
     runs-on: ubuntu-latest

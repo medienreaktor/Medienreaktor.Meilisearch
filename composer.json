@@ -46,7 +46,6 @@
     "scripts": {
         "test": "./vendor/bin/phpunit",
         "lint:phpstan": "@php vendor/bin/phpstan analyse",
-        "lint:phpstan-generate-baseline": "@php vendor/bin/phpstan analyse --generate-baseline",
         "lint:phpcs": "./vendor/bin/phpcs --colors",
         "lint:phpcs:fix": "./vendor/bin/phpcbf --colors",
         "lint": [

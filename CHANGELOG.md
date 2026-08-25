@@ -9,13 +9,12 @@ Everything before the unreleased section was reconstructed from the Git history 
 the fact. It records what each release changed, not what its author would have written
 at the time, and the wording of older entries is inferred from commit messages.
 
-This repository also carries a Neos 9 line on the `neos9` branch. Its tags — `v2.5.1`,
-`2.8.0`, `2.9.0` — are not part of the history below, are not reachable from `main`,
-and are not installable against Neos 8. Only tags reachable from `main` are listed.
+This repository also carries a Neos 9 line on the `neos9` branch. Its tags - `3.0.0`
+and above - are not part of the history below.
 
 ## [Unreleased]
 
-Targeting 2.7.0.
+## [2.10.0] - 2026-08-25
 
 ### Added
 
@@ -298,7 +297,8 @@ Targeting 2.7.0.
 - Initial release: Meilisearch integration for Neos, with node indexing and a query
   builder.
 
-[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.6.0...HEAD
+[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.10.0...HEAD
+[2.10.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.6.0...2.10.0
 [2.6.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.5.0...2.6.0
 [2.5.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.4...2.5.0
 [2.4]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.3...2.4

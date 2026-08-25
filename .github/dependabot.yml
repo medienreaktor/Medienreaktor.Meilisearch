@@ -37,3 +37,38 @@ updates:
           # The CI matrix proves that range; moving it is a release decision, not
           # dependency drift, and 9.x in particular lives on its own branch.
           - dependency-name: "neos/*"
+
+    # The Neos 9 line lives on the neos9 branch and is released as 3.x. Dependabot
+    # reads this file from the default branch only, so a copy on that branch would be
+    # inert — its coverage has to be declared here, with target-branch.
+    - package-ecosystem: "github-actions"
+      directory: "/"
+      target-branch: "neos9"
+      schedule:
+          interval: "monthly"
+      groups:
+          actions:
+              patterns:
+                  - "*"
+      commit-message:
+          prefix: "ci"
+
+    - package-ecosystem: "composer"
+      directory: "/"
+      target-branch: "neos9"
+      schedule:
+          interval: "monthly"
+      versioning-strategy: widen
+      groups:
+          dev-tooling:
+              dependency-type: "development"
+              patterns:
+                  - "*"
+      commit-message:
+          prefix: "build"
+          prefix-development: "build"
+      ignore:
+          # Same reasoning as the 2.x entries above: the neos/* range is what that
+          # branch supports, proven by its own CI matrix. Moving it is a release
+          # decision, not dependency drift.
+          - dependency-name: "neos/*"
