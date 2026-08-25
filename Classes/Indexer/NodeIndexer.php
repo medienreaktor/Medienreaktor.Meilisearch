@@ -7,7 +7,9 @@ namespace Medienreaktor\Meilisearch\Indexer;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Domain\Service\NodeLinkService;
 use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
+use Medienreaktor\Meilisearch\Exception;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
+use Neos\ContentRepository\Domain\Projection\Content\TraversableNodeInterface;
 use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraintFactory;
 use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraints;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
@@ -95,6 +97,8 @@ class NodeIndexer extends AbstractNodeIndexer
         $indexFallbackDimensions = true,
         array $targetDimensionCombination = []
     ): void {
+        $node = $this->requireTraversable($node);
+
         // Make sure this is a fulltext root, e.g. Neos.Neos:Document or subtype
         $node = $this->findFulltextRoot($node);
 
@@ -177,6 +181,7 @@ class NodeIndexer extends AbstractNodeIndexer
         $node = $context->getNodeByIdentifier($nodeIdentifier);
 
         if ($node !== null) {
+            $node = $this->requireTraversable($node);
             // Use dimensionCombination for hash when provided (handles fallback/shine-through)
             // This ensures content visible in English is indexed with English hash even if
             // the underlying node is German
@@ -228,7 +233,7 @@ class NodeIndexer extends AbstractNodeIndexer
      */
     public function removeNode(NodeInterface $node): void
     {
-        $identifier = $this->generateUniqueNodeIdentifier($node);
+        $identifier = $this->generateUniqueNodeIdentifier($this->requireTraversable($node));
         $this->indexClient->deleteDocuments([$identifier]);
     }
 
@@ -243,8 +248,8 @@ class NodeIndexer extends AbstractNodeIndexer
     /**
      * Find the node's fulltext root, e.g. Neos.Neos:Document, by recursively looking at the configuration.
      *
-     * @param NodeInterface $node
-     * @return NodeInterface
+     * @param NodeInterface&TraversableNodeInterface $node
+     * @return (NodeInterface&TraversableNodeInterface)|null
      */
     public function findFulltextRoot(NodeInterface $node): ?NodeInterface
     {
@@ -252,20 +257,18 @@ class NodeIndexer extends AbstractNodeIndexer
             return $node;
         }
 
+        // findParentNode() throws rather than returning null once the rootline is
+        // exhausted, so that exception is the loop's terminating condition.
         try {
-            $currentNode = $node->findParentNode();
-            while ($currentNode !== null) {
-                if (self::isFulltextRoot($currentNode)) {
-                    return $currentNode;
-                }
-
-                $currentNode = $currentNode->findParentNode();
+            $currentNode = $this->requireTraversable($node->findParentNode());
+            while (!self::isFulltextRoot($currentNode)) {
+                $currentNode = $this->requireTraversable($currentNode->findParentNode());
             }
+
+            return $currentNode;
         } catch (NodeException $exception) {
             return null;
         }
-
-        return null;
     }
 
     /**
@@ -296,13 +299,16 @@ class NodeIndexer extends AbstractNodeIndexer
 
         $nodeTypeConstraints = $this->nodeTypeConstraintFactory->parseFilterString('Neos.Neos:Content,Neos.Neos:ContentCollection');
 
-        foreach ($node->findChildNodes($nodeTypeConstraints) as $childNode) {
-            $this->enrichWithFulltextForContentNodes($childNode, $fulltextData, $nodeTypeConstraints);
+        foreach ($this->requireTraversable($node)->findChildNodes($nodeTypeConstraints) as $childNode) {
+            $this->enrichWithFulltextForContentNodes($this->requireTraversable($childNode), $fulltextData, $nodeTypeConstraints);
         }
 
         return $result;
     }
 
+    /**
+     * @param NodeInterface&TraversableNodeInterface $node
+     */
     protected function enrichWithFulltextForContentNodes(NodeInterface $node, array &$fulltextData, NodeTypeConstraints $nodeTypeConstraints): void
     {
         if ($this->isFulltextEnabled($node)) {
@@ -316,14 +322,14 @@ class NodeIndexer extends AbstractNodeIndexer
         }
 
         foreach ($node->findChildNodes($nodeTypeConstraints) as $childNode) {
-            $this->enrichWithFulltextForContentNodes($childNode, $fulltextData, $nodeTypeConstraints);
+            $this->enrichWithFulltextForContentNodes($this->requireTraversable($childNode), $fulltextData, $nodeTypeConstraints);
         }
     }
 
     /**
      * Generate identifier for index document based on node identifier and dimensions.
      *
-     * @param NodeInterface $node
+     * @param NodeInterface&TraversableNodeInterface $node
      * @param array|null $overrideDimensions Optional dimensions to use instead of node's context dimensions
      * @return string
      */
@@ -343,5 +349,30 @@ class NodeIndexer extends AbstractNodeIndexer
     protected function generateDocumentIdentifier(string $nodeIdentifier, string $dimensionsHash): string
     {
         return $nodeIdentifier . '_' . $dimensionsHash;
+    }
+
+    /**
+     * Neos splits the node contract across two unrelated interfaces: properties,
+     * context and visibility live on Model\NodeInterface, while traversal and the
+     * aggregate identifier live on TraversableNodeInterface. Nothing but the concrete
+     * Model\Node implements both, and every node Neos produces is that class — so the
+     * assumption is sound, and this is the one place it is checked rather than assumed.
+     *
+     * @param mixed $node
+     * @return NodeInterface&TraversableNodeInterface
+     * @throws Exception
+     */
+    public function requireTraversable($node)
+    {
+        if (!$node instanceof NodeInterface || !$node instanceof TraversableNodeInterface) {
+            throw new Exception(sprintf(
+                'Expected a node implementing both %s and %s, got %s.',
+                NodeInterface::class,
+                TraversableNodeInterface::class,
+                is_object($node) ? get_class($node) : gettype($node)
+            ), 1787000001);
+        }
+
+        return $node;
     }
 }

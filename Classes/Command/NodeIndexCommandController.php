@@ -8,6 +8,8 @@ use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Exception;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
+use Neos\ContentRepository\Domain\Projection\Content\TraversableNodeInterface;
+use Neos\ContentRepository\Domain\Service\Context;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use Neos\ContentRepository\Exception\NodeException;
 use Neos\ContentRepository\Search\Exception\IndexingException;
@@ -94,16 +96,14 @@ class NodeIndexCommandController extends CommandController
 
         if ($dimensionCombinations === []) {
             $context = $this->contextFactory->create(['workspaceName' => 'live']);
-            $rootNode = $context->getRootNode();
-            $this->collectNodes($rootNode, $nodes);
+            $this->collectNodes($this->traversableRootNode($context), $nodes);
         } else {
             foreach ($dimensionCombinations as $dimensions) {
                 $context = $this->contextFactory->create([
                     'workspaceName' => 'live',
                     'dimensions' => $dimensions
                 ]);
-                $rootNode = $context->getRootNode();
-                $this->collectNodes($rootNode, $nodes, false, false, $dimensions);
+                $this->collectNodes($this->traversableRootNode($context), $nodes, false, false, $dimensions);
             }
         }
 
@@ -167,8 +167,8 @@ class NodeIndexCommandController extends CommandController
      * Recursively collects all fulltext root nodes into a flat array so that
      * the total count is known before indexing begins.
      *
-     * @param NodeInterface $currentNode
-     * @param array $nodes
+     * @param NodeInterface&TraversableNodeInterface $currentNode
+     * @param list<array{node: NodeInterface&TraversableNodeInterface, indexAllDimensions: bool, indexFallbackDimensions: bool, targetDimensionCombination: array}> $nodes
      * @param bool $indexAllDimensions
      * @param bool $indexFallbackDimensions
      * @param array $targetDimensionCombination
@@ -190,7 +190,7 @@ class NodeIndexCommandController extends CommandController
         }
 
         foreach ($currentNode->findChildNodes() as $childNode) {
-            $this->collectNodes($childNode, $nodes, $indexAllDimensions, $indexFallbackDimensions, $targetDimensionCombination);
+            $this->collectNodes($this->nodeIndexer->requireTraversable($childNode), $nodes, $indexAllDimensions, $indexFallbackDimensions, $targetDimensionCombination);
         }
     }
 
@@ -219,5 +219,17 @@ class NodeIndexCommandController extends CommandController
         }
 
         return false;
+    }
+
+    /**
+     * The context hands back Model\NodeInterface, while collecting nodes needs the
+     * traversal API Neos declares on a separate interface.
+     *
+     * @return NodeInterface&TraversableNodeInterface
+     * @throws Exception
+     */
+    protected function traversableRootNode(Context $context)
+    {
+        return $this->nodeIndexer->requireTraversable($context->getRootNode());
     }
 }
