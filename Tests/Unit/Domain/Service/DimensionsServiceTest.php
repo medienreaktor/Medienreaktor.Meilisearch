@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Tests\Unit\Domain\Service;
 
 use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
+use Medienreaktor\Meilisearch\Tests\Unit\Fixtures\ConstrainedPresetSource;
+use Neos\ContentRepository\Domain\Service\ContentDimensionCombinator;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -135,5 +137,68 @@ class DimensionsServiceTest extends TestCase
     public function testTheEmptyCombinationOfADimensionlessSiteMatches(): void
     {
         self::assertTrue($this->dimensionsService->combinationFallsBackTo([], []));
+    }
+
+    /**
+     * Two dimensions, two presets each: four combinations on paper, of which the
+     * site's constraints forbid one.
+     *
+     * @var array<string, array{presets: array<string, array{values: array<int, string>}>}>
+     */
+    private const PRESETS = [
+        'language' => [
+            'presets' => [
+                'de' => ['values' => ['de']],
+                'en' => ['values' => ['en', 'de']],
+            ],
+        ],
+        'country' => [
+            'presets' => [
+                'at' => ['values' => ['at']],
+                'ch' => ['values' => ['ch']],
+            ],
+        ],
+    ];
+
+    /**
+     * @param list<array<string, string>> $forbidden
+     */
+    private function dimensionsServiceFor(array $forbidden): DimensionsService
+    {
+        $presetSource = new ConstrainedPresetSource(self::PRESETS, $forbidden);
+        $combinator = new ContentDimensionCombinator();
+        $dimensionsService = new DimensionsService();
+
+        $seed = [
+            [$combinator, 'contentDimensionPresetSource', $presetSource],
+            [$dimensionsService, 'contentDimensionCombinator', $combinator],
+            [$dimensionsService, 'contentDimensionPresetSource', $presetSource],
+        ];
+        foreach ($seed as [$object, $propertyName, $value]) {
+            $property = (new \ReflectionObject($object))->getProperty($propertyName);
+            $property->setAccessible(true);
+            $property->setValue($object, $value);
+        }
+
+        return $dimensionsService;
+    }
+
+    public function testAllCombinationsCoversEveryPresetPairWhenNothingIsForbidden(): void
+    {
+        self::assertCount(4, $this->dimensionsServiceFor([])->getAllCombinations());
+    }
+
+    /**
+     * A combination the site's constraints reject cannot be entered by a visitor, so
+     * indexing a variant for it writes a document nothing can ever match.
+     */
+    public function testAllCombinationsOmitsWhatTheConstraintsForbid(): void
+    {
+        $combinations = $this->dimensionsServiceFor([
+            ['language' => 'en', 'country' => 'at'],
+        ])->getAllCombinations();
+
+        self::assertNotContains(['language' => ['en', 'de'], 'country' => ['at']], $combinations);
+        self::assertCount(3, $combinations);
     }
 }
