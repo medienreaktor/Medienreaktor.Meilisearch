@@ -74,4 +74,57 @@ class DimensionsServiceTest extends TestCase
             $this->dimensionsService->hash(['language' => ['en']])
         );
     }
+
+    /**
+     * The indexer uses this to decide which dimension combinations a node shines
+     * through into. Getting it wrong does not fail loudly — it indexes a variant under
+     * the wrong dimension, or fails to index one at all.
+     */
+    public function testACombinationMatchesTheNodesOwnDimension(): void
+    {
+        self::assertTrue($this->dimensionsService->combinationFallsBackTo(
+            ['language' => ['de']],
+            ['language' => ['de']]
+        ));
+    }
+
+    public function testACombinationInAnUnrelatedValueDoesNotMatch(): void
+    {
+        self::assertFalse($this->dimensionsService->combinationFallsBackTo(
+            ['language' => ['de']],
+            ['language' => ['en']]
+        ));
+    }
+
+    /**
+     * Shine-through: an English context that falls back to German carries German
+     * content, so a German node belongs in that combination too.
+     */
+    public function testACombinationWhoseFallbackChainReachesTheNodeMatches(): void
+    {
+        self::assertTrue($this->dimensionsService->combinationFallsBackTo(
+            ['language' => ['de']],
+            ['language' => ['en', 'de']]
+        ));
+    }
+
+    public function testItWorksForADimensionThatIsNotCalledLanguage(): void
+    {
+        self::assertTrue($this->dimensionsService->combinationFallsBackTo(
+            ['country' => ['at']],
+            ['country' => ['at']]
+        ));
+        self::assertFalse($this->dimensionsService->combinationFallsBackTo(
+            ['country' => ['at']],
+            ['country' => ['ch']]
+        ));
+    }
+
+    public function testEveryDimensionOfTheCombinationHasToMatch(): void
+    {
+        self::assertFalse($this->dimensionsService->combinationFallsBackTo(
+            ['language' => ['de'], 'country' => ['at']],
+            ['language' => ['de'], 'country' => ['ch']]
+        ));
+    }
 }
