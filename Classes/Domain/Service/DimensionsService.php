@@ -79,7 +79,24 @@ class DimensionsService
      */
     public function combinationFallsBackTo(array $nodeDimensions, array $combination): bool
     {
-        return in_array($nodeDimensions['language'][0], $combination['language']);
+        foreach ($combination as $dimensionName => $combinationValues) {
+            $nodeValues = $nodeDimensions[$dimensionName] ?? [];
+            if ($nodeValues === []) {
+                return false;
+            }
+
+            // The node's primary value is the one it is authored in; the combination's
+            // values are its fallback chain. The node shines through where its primary
+            // appears anywhere in that chain. Comparison stays loose, as it was, so a
+            // dimension value typed as a number on one side still matches.
+            if (!in_array(reset($nodeValues), $combinationValues)) {
+                return false;
+            }
+        }
+
+        // A site without dimensions yields one empty combination, which every node
+        // trivially belongs to.
+        return true;
     }
 
     /**

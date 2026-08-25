@@ -127,4 +127,13 @@ class DimensionsServiceTest extends TestCase
             ['language' => ['de'], 'country' => ['ch']]
         ));
     }
+
+    /**
+     * A site without dimensions produces a single empty combination — getAllAllowed-
+     * Combinations() returns [[]] — and every node belongs to it.
+     */
+    public function testTheEmptyCombinationOfADimensionlessSiteMatches(): void
+    {
+        self::assertTrue($this->dimensionsService->combinationFallsBackTo([], []));
+    }
 }
