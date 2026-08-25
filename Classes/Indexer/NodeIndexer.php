@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Indexer;
@@ -93,8 +94,7 @@ class NodeIndexer extends AbstractNodeIndexer
         $indexAllDimensions = true,
         $indexFallbackDimensions = true,
         array $targetDimensionCombination = []
-    ): void
-    {
+    ): void {
         // Make sure this is a fulltext root, e.g. Neos.Neos:Document or subtype
         $node = $this->findFulltextRoot($node);
 
@@ -123,7 +123,7 @@ class NodeIndexer extends AbstractNodeIndexer
                     $documents[] = $nodeVariant;
                 }
             }
-        } elseif($indexFallbackDimensions && $dimensionCombinations !== []) {
+        } elseif ($indexFallbackDimensions && $dimensionCombinations !== []) {
             // Index only the current dimension and all dimensions that fall back to the current nodes dimensions.
             foreach ($dimensionCombinations as $combination) {
                 // Check if current dimension and all dimensions that fall back to the current nodes dimensions

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Command;
@@ -121,7 +122,7 @@ class NodeIndexCommandController extends CommandController
                     $nodeToIndex['indexFallbackDimensions'],
                     $nodeToIndex['targetDimensionCombination']
                 );
-            } catch (NodeException|IndexingException $exception) {
+            } catch (NodeException | IndexingException $exception) {
                 throw new Exception(sprintf('Error during indexing of node %s (%s)', $node->findNodePath(), (string) $node->getNodeAggregateIdentifier()), 1690288327, $exception);
             }
             $this->indexedNodes++;
@@ -178,8 +179,7 @@ class NodeIndexCommandController extends CommandController
         bool $indexAllDimensions = true,
         bool $indexFallbackDimensions = true,
         array $targetDimensionCombination = []
-    ): void
-    {
+    ): void {
         if (self::isFulltextRoot($currentNode)) {
             $nodes[] = [
                 'node' => $currentNode,
