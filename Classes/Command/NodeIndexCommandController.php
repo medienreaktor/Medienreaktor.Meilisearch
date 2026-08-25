@@ -60,26 +60,80 @@ class NodeIndexCommandController extends CommandController {
     }
 
     /**
-     * Index all nodes.
+     * Index all nodes in-place into the live index.
      *
+     * @param int|null $limit Only index up to this many nodes per dimension (for quick testing)
      * @return void
      * @throws Exception
      */
-    public function buildCommand(): void {
+    public function buildCommand(?int $limit = null): void {
+        $startTime = microtime(true);
         $this->indexClient->createIndex();
 
         $contentRepositoryId = ContentRepositoryId::fromString('default');
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $workspace = $contentRepository->findWorkspaceByName(WorkspaceName::forLive());
 
-        $contentGraph = $contentRepository->getContentGraph($workspace->workspaceName);
-        $rootNodeAggregate = $contentGraph->findRootNodeAggregateByType(NodeTypeName::fromString('Neos.Neos:Sites'));
+        $this->output->progressStart($this->progressMax($contentRepositoryId, $workspace->workspaceName, $limit));
+        $this->indexedNodes = $this->workspaceIndexer->index($contentRepositoryId, $workspace->workspaceName, limit: $limit, singleCallback: fn() => $this->output->progressAdvance());
+        $this->output->progressFinish();
 
+        $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes in ' . round(microtime(true) - $startTime, 1) . 's.');
+    }
 
-        $this->output->progressStart();
-        $this->indexedNodes = $this->workspaceIndexer->index($contentRepositoryId, $workspace->workspaceName, singleCallback: fn() => $this->output->progressAdvance());
+    /**
+     * Zero-downtime reindex: build into a fresh temporary index, then atomically
+     * swap it live. The current index keeps serving complete results the whole
+     * time — no gap, no half-built state. On error the temp index is discarded
+     * and the live index stays untouched.
+     *
+     * Documents written by other indexers into the same index (assets, PDFs) are
+     * copied over before the swap — see the "indexing.preserveOnRebuild" setting.
+     *
+     * @param int|null $limit Only index up to this many nodes per dimension. This builds a partial index, which is never swapped live — for testing the build itself.
+     * @param bool $skipRemoval Skip the per-node delete (safe: the build index is fresh/empty). Disable to benchmark its cost.
+     * @return void
+     * @throws Exception
+     */
+    public function rebuildCommand(?int $limit = null, bool $skipRemoval = true): void {
+        $startTime = microtime(true);
+        $contentRepositoryId = ContentRepositoryId::fromString('default');
+        $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
+        $workspace = $contentRepository->findWorkspaceByName(WorkspaceName::forLive());
 
-        $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes.');
+        $buildIndexName = $this->indexClient->createBuildIndex();
+        $this->output->progressStart($this->progressMax($contentRepositoryId, $workspace->workspaceName, $limit));
+        try {
+            $this->indexedNodes = $this->workspaceIndexer->index(
+                $contentRepositoryId,
+                $workspace->workspaceName,
+                limit: $limit,
+                singleCallback: fn() => $this->output->progressAdvance(),
+                skipRemoval: $skipRemoval,
+                targetIndexName: $buildIndexName
+            );
+            $this->output->progressFinish();
+            $this->outputLine('');
+
+            if ($limit !== null) {
+                // A capped run holds a fraction of the documents. Swapping it would
+                // do exactly what this command exists to prevent: leave the live
+                // index short of most of its content.
+                $this->indexClient->deleteBuildIndex($buildIndexName);
+                $this->outputLine('<comment>--limit was set: built %d nodes into a partial index and discarded it. The live index is untouched — run without --limit to actually rebuild.</comment>', [$this->indexedNodes]);
+                return;
+            }
+
+            foreach ($this->indexClient->preserveDocuments($buildIndexName) as $label => $preserved) {
+                $this->outputLine('Carried over %d "%s" documents from the live index.', [$preserved, $label]);
+            }
+            $this->indexClient->swapBuildIndex($buildIndexName);
+        } catch (\Throwable $e) {
+            $this->indexClient->deleteBuildIndex($buildIndexName);
+            throw $e;
+        }
+
+        $this->outputLine('Finished zero-downtime rebuild — indexed ' . $this->indexedNodes . ' nodes and swapped the index in ' . round(microtime(true) - $startTime, 1) . 's.');
     }
 
     /**
@@ -88,6 +142,19 @@ class NodeIndexCommandController extends CommandController {
     public function flushCommand(): void {
         $this->indexClient->deleteAllDocuments();
         $this->outputLine('All documents flushed from the index.');
+    }
+
+    /**
+     * Number of progress steps to expect. The indexer visits every node once per
+     * dimension, and $limit caps the count per dimension — so the total advances
+     * are $limit times the number of dimensions.
+     */
+    protected function progressMax(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, ?int $limit): int {
+        if ($limit === null) {
+            return $this->workspaceIndexer->count($contentRepositoryId, $workspaceName);
+        }
+        $dimensionSpacePoints = $this->contentRepositoryRegistry->get($contentRepositoryId)->getVariationGraph()->getDimensionSpacePoints();
+        return $limit * max(1, $dimensionSpacePoints->count());
     }
 
     /**

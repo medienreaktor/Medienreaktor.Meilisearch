@@ -16,6 +16,19 @@ Medienreaktor:
     indexing:
       batchSize: 100
       maxFulltextBytes: 500000
+      # How long (ms) to wait for a queued Meilisearch task. The SDK default of
+      # 5000 is too short for a swap or a settings update on a large index: the
+      # task still completes, but the client gives up and the command exits 1.
+      taskTimeout: 300000
+      # Age (seconds) after which a build index left behind by an aborted
+      # nodeindex:rebuild is dropped. Younger ones may belong to a running build.
+      staleBuildIndexTtl: 86400
+      # Documents a node rebuild does not produce itself but that live in the same
+      # index, as "label: <Meilisearch filter>". They are copied into the build
+      # index before the swap, which would otherwise drop them. Packages that
+      # write their own documents (e.g. the asset indexer) add their filter here.
+      # Every attribute used must be in settings.filterableAttributes.
+      preserveOnRebuild: {}
     client:
       endpoint: 'http://meilisearch:7700'
       apiKey: '1234'

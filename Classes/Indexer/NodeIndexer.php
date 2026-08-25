@@ -136,16 +136,20 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param string $targetWorkspace
      * @return void
      */
-    public function indexSingleNode(Node $node): void {
+    public function indexSingleNode(Node $node, bool $skipRemoval = false, ?string $targetIndexName = null): void {
         $node = $this->findFulltextRoot($node);
         if ($node !== null) {
-            $this->removeNode($node);
+            // The rebuild build index is fresh/empty, so the per-node delete is
+            // pure overhead; documents upsert by id, so skipping removal is safe.
+            if (!$skipRemoval) {
+                $this->removeNode($node, null, $targetIndexName);
+            }
             $nodeVariant = $this->extractNodeVariant($node, $node->dimensionSpacePoint);
             if ($nodeVariant !== null) {
                 $this->documentBuffer[] = $nodeVariant;
             }
             if (count($this->documentBuffer) >= $this->batchSize) {
-                $this->flushBuffer();
+                $this->flushBuffer($targetIndexName);
             }
         }
     }
@@ -191,22 +195,23 @@ class NodeIndexer extends AbstractNodeIndexer {
      *
      * @param Node $node
      * @param WorkspaceName|null $targetWorkspaceName
+     * @param string|null $targetIndexName Delete from this index instead of the live one (rebuild)
      * @return void
      */
-    public function removeNode(Node $node, WorkspaceName|null $targetWorkspaceName = null): void {
+    public function removeNode(Node $node, WorkspaceName|null $targetWorkspaceName = null, ?string $targetIndexName = null): void {
         $identifier = $this->generateUniqueNodeIdentifier($node);
-        $this->indexClient->deleteDocuments([$identifier]);
+        $this->indexClient->deleteDocuments([$identifier], $targetIndexName);
     }
 
-    public function flush(): void {
-        $this->flushBuffer();
+    public function flush(?string $targetIndexName = null): void {
+        $this->flushBuffer($targetIndexName);
     }
 
-    protected function flushBuffer(): void {
+    protected function flushBuffer(?string $targetIndexName = null): void {
         if (empty($this->documentBuffer)) {
             return;
         }
-        $this->indexClient->addDocuments($this->documentBuffer);
+        $this->indexClient->addDocuments($this->documentBuffer, $targetIndexName);
         $this->documentBuffer = [];
     }
 

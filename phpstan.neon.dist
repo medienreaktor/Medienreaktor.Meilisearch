@@ -1,0 +1,10 @@
+parameters:
+    level: 5
+    # Tests/ is not part of this branch yet; add it back together with the suite.
+    paths:
+        - Classes
+    # The package declares php ^8.2 — the floor neos/flow ^9 and
+    # neos/content-repository-search ^5 both impose — so analyse against that
+    # rather than the interpreter in use, or 8.3-only syntax passes locally and
+    # breaks the oldest supported target.
+    phpVersion: 80200
