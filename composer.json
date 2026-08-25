@@ -5,12 +5,12 @@
     "license": "MIT",
     "require": {
         "php": "^8.0",
-        "neos/flow": "^8.0",
-        "neos/neos": "^8.0",
-        "neos/content-repository": "^8.0",
-        "neos/content-repository-search": "^4.0",
-        "neos/eel": "^8.0",
-        "neos/media": "^8.0",
+        "neos/flow": "^8.3",
+        "neos/neos": "^8.3",
+        "neos/content-repository": "^8.3",
+        "neos/content-repository-search": "^4.1.2",
+        "neos/eel": "^8.3",
+        "neos/media": "^8.3",
         "meilisearch/meilisearch-php": "^1.0",
         "guzzlehttp/guzzle": "^7.0",
         "http-interop/http-factory-guzzle": "^1.0"

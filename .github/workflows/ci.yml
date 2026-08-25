@@ -8,37 +8,48 @@ on:
   # Lets a release be re-verified without an empty commit.
   workflow_dispatch:
 
+# Nothing here writes to the repository; the token only lifts Composer's
+# unauthenticated GitHub API rate limit when fetching dist archives.
+permissions:
+  contents: read
+
+# Third-party actions are pinned by commit SHA rather than tag, because a tag can
+# be moved onto different code after review. GitHub's own actions/* are pinned to
+# the major, which GitHub controls and repoints deliberately.
+env:
+  # Installing Neos pulls well over a hundred packages as GitHub dist archives,
+  # which exhausts the 60-per-hour unauthenticated API limit.
+  COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+
 jobs:
   # Lint is deliberately not part of the test matrix below. The PHPStan baseline
-  # records errors as they appear against one set of dependencies; analysing the
-  # same code against Neos 7 and Neos 8 produces different findings, so a matrixed
-  # PHPStan would either fail on unmatched baseline entries or need
-  # reportUnmatchedIgnoredErrors disabled — which would blunt the baseline for the
-  # one configuration that matters. Style and static analysis do not vary by PHP
-  # version here, so one authoritative run is enough.
+  # records errors as they appear against one set of dependencies, so analysing the
+  # same code against several would either fail on unmatched baseline entries or
+  # need reportUnmatchedIgnoredErrors disabled — which would blunt the baseline for
+  # the one configuration that matters. Style and static analysis do not vary by
+  # PHP version here, so one authoritative run is enough.
   lint:
     name: Lint (PHP 8.3, highest deps)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    container:
-      image: php:8.3-cli
-    env:
-      COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
 
     steps:
-      - name: Install git and unzip
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends git unzip
-
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Install Composer
-        run: |
-          php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');"
-          php /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
-          composer --version
+      # Supplies both the interpreter and Composer, so nothing has to be fetched
+      # from getcomposer.org at job time. The official `composer` image was the
+      # alternative, but it ships exactly one PHP version and so cannot serve the
+      # matrix below.
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.3'
+          # Everything neos/flow and neos/utility-unicode declare, plus what PHPUnit
+          # needs. json, reflection and spl are core in PHP 8 and need no request.
+          extensions: mbstring, xml, xmlreader, zlib, dom, tokenizer
+          tools: composer:v2
+          coverage: none
 
       # The manifest is this package's contract with every consuming distribution,
       # and a wrong constraint there is exactly the class of bug that reaches
@@ -47,7 +58,10 @@ jobs:
         run: composer validate --strict
 
       - name: Install dependencies
-        run: composer update --no-progress --prefer-dist --optimize-autoloader
+        uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+        with:
+          dependency-versions: highest
+          composer-options: "--prefer-dist"
 
       - name: Run Linting (PHPStan & PHP CodeSniffer)
         run: composer lint
@@ -61,22 +75,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # PHP comes from the official image rather than the runner, which keeps the
-    # matrix reproducible and carries the extensions Neos needs.
-    container:
-      image: php:${{ matrix.php }}-cli
-
     strategy:
       # Let every version report rather than killing the rest when the first fails.
       fail-fast: false
       matrix:
-        # composer.json advertises php ^8.0, so the floor is exercised rather than
-        # asserted:
+        # composer.json declares php ^8.0 with neos/* ^8.3, and both ends of that
+        # are exercised rather than asserted:
         #
-        #   - `lowest` on 8.0 pins the oldest installable set: meilisearch-php 1.0,
-        #     PHPUnit 9.6, and Neos 8.3 — not 8.0, because Composer blocks the
-        #     neos/media-browser releases the 8.0-8.2 line depends on over published
-        #     advisories. The declared ^8.0 is therefore wider than what resolves.
+        #   - `lowest` on 8.0 pins the oldest set the constraints permit, which is
+        #     also the oldest that installs at all: Neos 8.3, meilisearch-php 1.0,
+        #     content-repository-search 4.1.2, PHPUnit 9.6.
         #   - `highest` walks up to the newest Neos each interpreter permits: 8.0 and
         #     8.1 land on Neos 8.3, 8.2+ on Neos 8.4, which requires PHP >= 8.2.
         #
@@ -89,38 +97,26 @@ jobs:
           - { php: '8.3', deps: 'highest' }
           - { php: '8.4', deps: 'highest' }
 
-    env:
-      # Installing Neos pulls well over a hundred packages as GitHub dist zips,
-      # which exhausts the 60-per-hour unauthenticated API limit. The token the
-      # workflow already has is enough to lift it.
-      COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
-
     steps:
-      # The image carries no git, and actions/checkout needs one. unzip lets
-      # Composer use --prefer-dist rather than cloning every dependency.
-      - name: Install git and unzip
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends git unzip
-
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Install Composer
-        run: |
-          php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');"
-          php /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
-          composer --version
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, xml, xmlreader, zlib, dom, tokenizer
+          tools: composer:v2
+          coverage: none
 
-      # No extension setup step: everything Neos declares — json, mbstring, xml,
-      # xmlreader, zlib, tokenizer, dom — is enabled in the official images, and
-      # composer update verifies that for us.
-      #
-      # `update` rather than `install`: no composer.lock is committed, so this is a
-      # resolution from the constraints every time — which is the point of the
-      # lowest/highest split.
+      # Resolves from the constraints every time — no composer.lock is committed,
+      # which is what makes the lowest/highest split meaningful. The action caches
+      # the Composer download cache per PHP version and dependency preference.
       - name: Install dependencies
-        run: composer update --no-progress --prefer-dist --optimize-autoloader ${{ matrix.deps == 'lowest' && '--prefer-lowest --prefer-stable' || '' }}
+        uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+        with:
+          dependency-versions: ${{ matrix.deps }}
+          composer-options: "--prefer-dist"
 
       # Makes the floor claim auditable: the log states which Neos the job actually
       # ran against, rather than leaving it to be inferred from the matrix name.
