@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Domain\Service;
 
+use Meilisearch\Search\SearchResult;
+
 /**
  * Interface IndexInterface
  */
@@ -50,4 +52,13 @@ interface IndexInterface
      * @return string
      */
     public function getIndexName(): string;
+
+    /**
+     * Perform a search.
+     *
+     * @param string $query
+     * @param array $parameters
+     * @return SearchResult
+     */
+    public function search(string $query, array $parameters): SearchResult;
 }

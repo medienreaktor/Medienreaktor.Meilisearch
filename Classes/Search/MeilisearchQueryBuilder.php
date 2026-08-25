@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Search;
 
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
+use Medienreaktor\Meilisearch\Exception;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
+use Neos\ContentRepository\Domain\Projection\Content\TraversableNodeInterface;
 use Neos\ContentRepository\Search\Search\QueryBuilderInterface;
 use Neos\Eel\ProtectedContextAwareInterface;
 use Neos\Flow\Annotations as Flow;
@@ -273,7 +275,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
         foreach ($results->getHits() as $hit) {
             $nodePath = $hit['__path'];
             $node = $this->contextNode->getNode($nodePath);
-            if ($node instanceof NodeInterface) {
+            if ($node instanceof TraversableNodeInterface) {
                 $nodes[(string) $node->getNodeAggregateIdentifier()] = $node;
             }
         }
@@ -281,9 +283,10 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * Execute the query and return the raw results enriched with node information
+     * Execute the query and return the raw hits, each enriched with its resolved
+     * node under `__node` where one could be resolved.
      *
-     * @return \Traversable<\Neos\ContentRepository\Domain\Model\NodeInterface>
+     * @return \Traversable<int, array<string, mixed>>
      */
     public function executeRaw(): \Traversable
     {
@@ -299,7 +302,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
 
             $nodePath = $hit['__path'];
             $node = $this->contextNode->getNode($nodePath);
-            if ($node instanceof NodeInterface) {
+            if ($node instanceof TraversableNodeInterface) {
                 $hit['__node'] = $node;
                 $hits[(string) $node->getNodeAggregateIdentifier()] = $hit;
             }
@@ -309,9 +312,9 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * Execute the query and return the raw results enriched with node information
+     * Execute the query and return the raw hits, without resolving any nodes.
      *
-     * @return \Traversable<\Neos\ContentRepository\Domain\Model\NodeInterface>
+     * @return \Traversable<int, array<string, mixed>>
      */
     public function executeWithoutProcessing(): \Traversable
     {
@@ -382,6 +385,17 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      */
     public function query(NodeInterface $contextNode): QueryBuilderInterface
     {
+        // QueryBuilderInterface pins this to Model\NodeInterface, but findNodePath() is
+        // declared on TraversableNodeInterface. Only the concrete Model\Node implements
+        // both, which is what Neos always passes.
+        if (!$contextNode instanceof TraversableNodeInterface) {
+            throw new Exception(sprintf(
+                'Cannot build a query for %s: it does not implement %s.',
+                get_class($contextNode),
+                TraversableNodeInterface::class
+            ), 1787000002);
+        }
+
         $this->contextNode = $contextNode;
         $nodePath = (string) $contextNode->findNodePath();
         $dimensionsHash = $this->dimensionsService->hashByNode($contextNode);
