@@ -21,6 +21,15 @@ interface IndexInterface
     public function createBuildIndex(): string;
 
     /**
+     * Copy documents this rebuild does not produce itself (e.g. the asset
+     * indexer's) from the live index into the build index, so the swap does not
+     * drop them. Driven by the "indexing.preserveOnRebuild" setting.
+     *
+     * @return array<string,int> Number of copied documents per configured label
+     */
+    public function preserveDocuments(string $buildIndexName): array;
+
+    /**
      * Atomically swap a freshly-built index into the live index, then drop the
      * old data. Aborts (leaving live untouched) if the build index is empty.
      */

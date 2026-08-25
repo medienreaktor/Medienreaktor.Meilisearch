@@ -87,6 +87,32 @@ Medienreaktor:
 
 Please do not remove, only extend, above `filterableAttributes`, as they are needed for base functionality to work. After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`.
 
+### Rebuilding without downtime
+
+`flow nodeindex:build` writes into the live index, so while it runs the index is
+incomplete. `flow nodeindex:rebuild` instead builds into a temporary index and
+swaps it live in one atomic step; if anything fails, the temporary index is
+discarded and the live index is left untouched.
+
+`--limit <n>` caps the number of indexed nodes per dimension for a quick check of
+the build itself. Such a partial index is never swapped live.
+
+Other packages may write their own documents into the same index (the asset
+indexer stores its media and PDF documents next to the node documents). A node
+rebuild does not produce those, so they must be listed for the swap to keep them:
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    indexing:
+      preserveOnRebuild:
+        assets: '__isAsset = true'
+```
+
+Every document matching such a filter is copied from the live index into the
+temporary index before the swap. The attributes used in a filter must be part of
+`settings.filterableAttributes`.
+
 Document NodeTypes should be configured as fulltext root (this comes by default for all `Neos.Neos:Document` subtypes):
 
 ```yaml
