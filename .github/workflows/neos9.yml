@@ -1,0 +1,125 @@
+name: CI (neos9)
+
+on:
+  push:
+    branches: [ neos9 ]
+  pull_request:
+    branches: [ neos9 ]
+  # Lets a release be re-verified without an empty commit.
+  workflow_dispatch:
+
+# Nothing here writes to the repository; the token only lifts Composer's
+# unauthenticated GitHub API rate limit when fetching dist archives.
+permissions:
+  contents: read
+
+# Third-party actions are pinned by commit SHA rather than tag, because a tag can
+# be moved onto different code after review. GitHub's own actions/* are pinned to
+# the major, which GitHub controls and repoints deliberately.
+env:
+  # Installing Neos pulls well over a hundred packages as GitHub dist archives,
+  # which exhausts the 60-per-hour unauthenticated API limit.
+  COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+
+jobs:
+  # Lint is deliberately not part of the test matrix below: style and static
+  # analysis do not vary by PHP version here, so one authoritative run is enough.
+  #
+  # There is deliberately no PHPStan baseline on this branch, and no composer script
+  # to generate one. The errors a baseline would record are the work this line still
+  # owes after the Neos 9 port — not accepted debt to be silenced in one command.
+  lint:
+    name: Lint (PHP 8.3, highest deps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # Supplies both the interpreter and Composer, so nothing has to be fetched
+      # from getcomposer.org at job time. The official `composer` image was the
+      # alternative, but it ships exactly one PHP version and so cannot serve the
+      # matrix below.
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.3'
+          # Everything neos/flow and neos/utility-unicode declare, plus what PHPUnit
+          # needs. json, reflection and spl are core in PHP 8 and need no request.
+          extensions: mbstring, xml, xmlreader, zlib, dom, tokenizer
+          tools: composer:v2
+          coverage: none
+
+      # The manifest is this package's contract with every consuming distribution,
+      # and a wrong constraint there is exactly the class of bug that reaches
+      # projects silently. Cheap to check, so check it before anything installs.
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+        with:
+          dependency-versions: highest
+          composer-options: "--prefer-dist"
+
+      - name: Run Linting (PHPStan & PHP CodeSniffer)
+        run: composer lint
+
+  test:
+    name: Test (PHP ${{ matrix.php }}, ${{ matrix.deps }} deps)
+    # GitHub-hosted rather than the org's self-hosted runner: this repository is
+    # public, and the org runner group is set to allows_public_repositories: false,
+    # so a job from here is never claimed and sits queued indefinitely next to an
+    # idle runner. GitHub-hosted minutes are free and unlimited for public repos.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      # Let every version report rather than killing the rest when the first fails.
+      fail-fast: false
+      matrix:
+        # composer.json declares php ^8.2 with neos/* ^9.0, and both ends of that
+        # are exercised rather than asserted:
+        #
+        #   - `lowest` on 8.2 pins the oldest set the constraints permit, which is
+        #     also the oldest that installs at all: neos/flow ^9 and
+        #     neos/content-repository-search ^5 both require PHP >= 8.2, so there
+        #     is no 8.0/8.1 row to run on this line.
+        #   - `highest` walks up to the newest Neos 9 each interpreter permits.
+        #
+        # 8.5 is left out until Neos 9 supports it.
+        include:
+          - { php: '8.2', deps: 'lowest' }
+          - { php: '8.2', deps: 'highest' }
+          - { php: '8.3', deps: 'highest' }
+          - { php: '8.4', deps: 'highest' }
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, xml, xmlreader, zlib, dom, tokenizer
+          tools: composer:v2
+          coverage: none
+
+      # Resolves from the constraints every time — no composer.lock is committed,
+      # which is what makes the lowest/highest split meaningful. The action caches
+      # the Composer download cache per PHP version and dependency preference.
+      - name: Install dependencies
+        uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+        with:
+          dependency-versions: ${{ matrix.deps }}
+          composer-options: "--prefer-dist"
+
+      # Makes the floor claim auditable: the log states which Neos the job actually
+      # ran against, rather than leaving it to be inferred from the matrix name.
+      - name: Show resolved dependency versions
+        run: composer show --direct
+
+      - name: Run Tests (PHPUnit)
+        run: composer test

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The PHP floor on this branch is 8.2 (neos/flow ^9), so PHPUnit 9.6 is out of
+    range and the schema can stay on what 10.5 and 11.5 share.
+
+    There is no test suite on this line yet — the Neos 9 port did not carry one
+    over. failOnEmptyTestSuite stays false (PHPUnit's default, spelled out here so
+    it is not switched on by accident) so the job reports green on an empty run
+    rather than blocking CI on tests nobody has written. Tests/Unit itself has to
+    exist: PHPUnit treats a missing directory as a configuration error, not as an
+    empty suite. Once the suite lands, this comment goes with it.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnRisky="true"
+         failOnWarning="true"
+         failOnEmptyTestSuite="false">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>Tests/Unit</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
