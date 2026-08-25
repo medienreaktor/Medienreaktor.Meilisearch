@@ -13,6 +13,7 @@ use Neos\Flow\Mvc\Controller\Arguments;
 use Neos\Flow\Mvc\Controller\ControllerContext;
 use Neos\Flow\Mvc\Routing\Dto\RouteParameters;
 use Neos\Flow\Mvc\Routing\UriBuilder;
+use Neos\Neos\Domain\Model\Domain;
 use Neos\Neos\Domain\Repository\SiteRepository;
 use Psr\Http\Message\ServerRequestFactoryInterface;
 use Psr\Http\Message\UriFactoryInterface;
@@ -60,8 +61,13 @@ class RequestService
                 $siteName = $nodePathSegments[2];
                 $site = $this->siteRepository->findOneByNodeName($siteName);
                 if ($site && $site->isOnline()) {
+                    // Neos types getPrimaryDomain() as returning Domain, but its own
+                    // docblock text says "or NULL" and it falls through to
+                    // getFirstActiveDomain(), which returns null for a site without one.
+                    // Trusting the declared type here emptied a whole index run.
+                    /** @var Domain|null $domain */
                     $domain = $site->getPrimaryDomain();
-                    if ($domain && $domain->getActive()) {
+                    if ($domain !== null && $domain->getActive()) {
                         $uri = $domain->__toString();
                         if (str_starts_with($uri, 'http://') || str_starts_with($uri, 'https://')) {
                             return $uri;

@@ -6,6 +6,7 @@ namespace Medienreaktor\Meilisearch\Controller;
 
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Mvc\Controller\ActionController;
+use Neos\Flow\ResourceManagement\PersistentResource;
 use Neos\Media\Domain\Model\AssetInterface;
 use Neos\Media\Domain\Model\ImageInterface;
 use Neos\Media\Domain\Model\ThumbnailConfiguration;
@@ -74,7 +75,17 @@ class ThumbnailController extends ActionController
 
         $thumbnail = $this->thumbnailService->getThumbnail($assetObject, $thumbnailConfiguration);
 
-        if (!$thumbnail instanceof ImageInterface || $thumbnail->getResource() === null) {
+        if (!$thumbnail instanceof ImageInterface) {
+            $this->response->setStatusCode(404);
+            return;
+        }
+
+        // Neos types Thumbnail::getResource() as returning PersistentResource, but the
+        // column behind it is nullable=true: a thumbnail queued for asynchronous
+        // generation has none yet, and building a URI from it would be meaningless.
+        /** @var PersistentResource|null $resource */
+        $resource = $thumbnail->getResource();
+        if ($resource === null) {
             $this->response->setStatusCode(404);
             return;
         }
