@@ -13,8 +13,10 @@ namespace Medienreaktor\Meilisearch\Indexer;
  * source code.
  */
 
+use Medienreaktor\Meilisearch\Exception;
 use Neos\ContentRepository\Core\ContentRepository;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
+use Neos\ContentRepository\Core\NodeType\NodeType;
 use Neos\ContentRepository\Core\NodeType\NodeTypeNames;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\CountDescendantNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindDescendantNodesFilter;
@@ -50,11 +52,13 @@ final class WorkspaceIndexer {
     protected ContentRepositoryRegistry $contentRepositoryRegistry;
 
     /**
-     * Lazily computed once per run (singleton): the node type criteria matching
-     * all fulltext roots. Iterating the node types on every dimension would be
-     * wasteful.
+     * Lazily computed once per run (singleton) and per content repository: the
+     * node type criteria matching all fulltext roots. Iterating the node types
+     * on every dimension would be wasteful.
+     *
+     * @var array<string,NodeTypeCriteria>
      */
-    private ?NodeTypeCriteria $fulltextRootCriteria = null;
+    private array $fulltextRootCriteria = [];
 
     /**
      * @param string $workspaceName
@@ -79,9 +83,9 @@ final class WorkspaceIndexer {
     }
 
     /**
-     * Counts how many nodes index() would visit (all descendants of the sites
-     * root across all dimensions). Cheap SQL COUNT, no nodes are materialised —
-     * used to give the build a determinate progress bar.
+     * Counts how many nodes index() would visit: the fulltext roots below the
+     * sites root plus the sites root itself, per dimension. Cheap SQL COUNT, no
+     * nodes are materialised — used to give the build a determinate progress bar.
      */
     public function count(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName): int {
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
@@ -98,6 +102,8 @@ final class WorkspaceIndexer {
         foreach ($dimensionSpacePoints as $dimensionSpacePoint) {
             $subgraph = $contentGraph->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved());
             $total += $subgraph->countDescendantNodes($rootNodeAggregate->nodeAggregateId, CountDescendantNodesFilter::create(nodeTypes: $rootNodeTypeCriteria));
+            // The sites root itself is visited before the descendants.
+            $total++;
         }
         return $total;
     }
@@ -107,19 +113,73 @@ final class WorkspaceIndexer {
      * We only iterate those: each becomes one search document, and their content
      * descendants' fulltext is collected during extraction — so visiting the
      * content nodes themselves would just re-extract the same document.
+     *
+     * Only the types that declare isRoot themselves are named: NodeTypeCriteria
+     * expands every entry to its subtypes, so naming the inheriting types as
+     * well would only bloat the generated IN (...) — normally this comes down to
+     * the single abstract Neos.Neos:Document.
      */
     protected function fulltextRootNodeTypeCriteria(ContentRepository $contentRepository): NodeTypeCriteria {
-        if ($this->fulltextRootCriteria !== null) {
-            return $this->fulltextRootCriteria;
+        $cacheKey = $contentRepository->id->value;
+        if (isset($this->fulltextRootCriteria[$cacheKey])) {
+            return $this->fulltextRootCriteria[$cacheKey];
         }
-        $rootNodeTypeNames = [];
-        foreach ($contentRepository->getNodeTypeManager()->getNodeTypes(false) as $nodeType) {
+
+        $nodeTypeManager = $contentRepository->getNodeTypeManager();
+        $isFulltextRoot = static function (NodeType $nodeType): bool {
             $search = $nodeType->getConfiguration('search');
-            if (is_array($search) && ($search['fulltext']['isRoot'] ?? false) === true) {
-                $rootNodeTypeNames[] = $nodeType->name->value;
+            return is_array($search) && ($search['fulltext']['isRoot'] ?? false) === true;
+        };
+
+        $rootNodeTypes = [];
+        foreach ($nodeTypeManager->getNodeTypes(true) as $nodeType) {
+            if ($isFulltextRoot($nodeType)) {
+                $rootNodeTypes[$nodeType->name->value] = $nodeType;
             }
         }
-        return $this->fulltextRootCriteria = NodeTypeCriteria::createWithAllowedNodeTypeNames(NodeTypeNames::fromStringArray($rootNodeTypeNames));
+        if ($rootNodeTypes === []) {
+            // An empty allow-list means "everything" to NodeTypeCriteria, which would
+            // silently turn the fulltext-root filter into a full graph walk.
+            throw new Exception(sprintf(
+                'No node type in content repository "%s" is configured as a fulltext root (search.fulltext.isRoot). Refusing to index, because an empty criteria would match every node instead.',
+                $cacheKey
+            ), 1756100000);
+        }
+
+        $inheritsIsRoot = [];
+        $optedOut = [];
+        foreach ($rootNodeTypes as $rootNodeType) {
+            foreach ($nodeTypeManager->getSubNodeTypes($rootNodeType->name, true) as $subNodeType) {
+                if ($isFulltextRoot($subNodeType)) {
+                    $inheritsIsRoot[$subNodeType->name->value] = true;
+                } else {
+                    // Switched isRoot off again — it has to be excluded explicitly,
+                    // or the supertype's expansion would pull it back in.
+                    $optedOut[$subNodeType->name->value] = true;
+                }
+            }
+        }
+
+        // An exclusion is expanded to its subtypes too and wins over an inclusion,
+        // so a type that opts out while one of its own subtypes re-enables isRoot
+        // cannot be expressed. Keep such a type in: visiting a few extra nodes only
+        // costs time (they resolve to their nearest fulltext root), whereas
+        // excluding them would drop documents from the index.
+        foreach (array_keys($optedOut) as $optedOutNodeTypeName) {
+            foreach ($nodeTypeManager->getSubNodeTypes($optedOutNodeTypeName, true) as $subNodeType) {
+                if ($isFulltextRoot($subNodeType)) {
+                    unset($optedOut[$optedOutNodeTypeName]);
+                    break;
+                }
+            }
+        }
+
+        $declaringNodeTypeNames = array_values(array_diff(array_keys($rootNodeTypes), array_keys($inheritsIsRoot)));
+
+        return $this->fulltextRootCriteria[$cacheKey] = NodeTypeCriteria::create(
+            NodeTypeNames::fromStringArray($declaringNodeTypeNames),
+            NodeTypeNames::fromStringArray(array_keys($optedOut))
+        );
     }
 
     /**
@@ -141,12 +201,18 @@ final class WorkspaceIndexer {
 
         $this->nodeIndexer->indexSingleNode($rootNode, $skipRemoval, $targetIndexName);
         $indexedNodes++;
+        if ($singleCallback !== null) {
+            $singleCallback($workspaceName, $indexedNodes, $dimensionSpacePoint);
+        }
 
         foreach ($subgraph->findDescendantNodes(
             $rootNode->aggregateId,
             FindDescendantNodesFilter::create(nodeTypes: $this->fulltextRootNodeTypeCriteria($contentRepository)))
                  as $descendantNode) {
-            if ($limit !== null && $indexedNodes > $limit) {
+            // $indexedNodes already counts the sites root, so this caps the visited
+            // nodes at exactly $limit per dimension — which is what the progress
+            // bar's maximum is calculated from.
+            if ($limit !== null && $indexedNodes >= $limit) {
                 break;
             }
 
