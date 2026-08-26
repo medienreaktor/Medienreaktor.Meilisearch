@@ -1,5 +1,7 @@
 # Medienreaktor.Meilisearch
 
+[![CI](https://github.com/medienreaktor/Medienreaktor.Meilisearch/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/medienreaktor/Medienreaktor.Meilisearch/actions/workflows/main.yml)
+
 Integrates Meilisearch into Neos.
 **Compatibility tested with Meilisearch versions 1.2 to 1.16.**  
 **Note:** Vector search with built-in embedders is only available from Meilisearch version 1.6.0 and above.

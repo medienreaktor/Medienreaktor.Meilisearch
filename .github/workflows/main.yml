@@ -1,4 +1,4 @@
-name: CI (main)
+name: CI
 
 on:
   push:
@@ -7,6 +7,13 @@ on:
     branches: [ main ]
   # Lets a release be re-verified without an empty commit.
   workflow_dispatch:
+
+# Supersede a run when the same pull request branch is pushed again, but never
+# cancel one on main or a manual re-verification — those exist to leave a verdict
+# on a commit, and a cancelled one leaves none.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Nothing here writes to the repository; the token only lifts Composer's
 # unauthenticated GitHub API rate limit when fetching dist archives.
@@ -21,6 +28,11 @@ env:
   # which exhausts the 60-per-hour unauthenticated API limit.
   COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
 
+  # Everything neos/flow and neos/utility-unicode declare, plus what PHPUnit and
+  # PHP_CodeSniffer need. ctype, filter, json, libxml, openssl, pcre, phar,
+  # reflection and spl are in the default build and need no request.
+  PHP_EXTENSIONS: mbstring, xml, xmlreader, xmlwriter, simplexml, dom, tokenizer, zlib
+
 jobs:
   # Lint is deliberately not part of the test matrix below: style and static
   # analysis do not vary by PHP version here, so one authoritative run is enough.
@@ -31,7 +43,7 @@ jobs:
   lint:
     name: Lint (PHP 8.3, highest deps)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -45,25 +57,24 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.3'
-          # Everything neos/flow and neos/utility-unicode declare, plus what PHPUnit
-          # needs. json, reflection and spl are core in PHP 8 and need no request.
-          extensions: mbstring, xml, xmlreader, zlib, dom, tokenizer
+          extensions: ${{ env.PHP_EXTENSIONS }}
           tools: composer:v2
           coverage: none
 
-      # The manifest is this package's contract with every consuming distribution,
-      # and a wrong constraint there is exactly the class of bug that reaches
-      # projects silently. Cheap to check, so check it before anything installs.
-      - name: Validate composer.json
-        run: composer validate --strict
-
+      # Installs kleisli/flow-phpstan into Build/ alongside vendor/ — it is a
+      # neos-build package, so neos/composer-plugin puts it there, which is where
+      # phpstan.neon.dist includes its extension.neon from.
       - name: Install dependencies
         uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
         with:
           dependency-versions: highest
           composer-options: "--prefer-dist"
 
-      - name: Run Linting (PHPStan & PHP CodeSniffer)
+      # composer validate --strict runs as part of this, as lint:composer. The
+      # manifest is this package's contract with every consuming distribution, and
+      # a wrong constraint there is exactly the class of bug that reaches projects
+      # silently.
+      - name: Run Linting (composer validate, PHPStan & PHP CodeSniffer)
         run: composer lint
 
   test:
@@ -73,7 +84,7 @@ jobs:
     # so a job from here is never claimed and sits queued indefinitely next to an
     # idle runner. GitHub-hosted minutes are free and unlimited for public repos.
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     strategy:
       # Let every version report rather than killing the rest when the first fails.
@@ -88,7 +99,12 @@ jobs:
         #   - `highest` walks up to the newest Neos each interpreter permits: 8.0 and
         #     8.1 land on Neos 8.3, 8.2+ on Neos 8.4, which requires PHP >= 8.2.
         #
-        # 8.5 is left out because Neos 8.4 does not support it.
+        # 8.5 is in: neos/flow 8.4 declares php ^8.2 and laminas/laminas-code 4.17
+        # lists ~8.5.0 explicitly, so nothing in the resolved set excludes it. An
+        # earlier revision of this file left it out on the claim that Neos 8.4 does
+        # not support 8.5, which the constraints do not bear out. It pairs with
+        # `highest` only, and always will: `lowest` deliberately pins PHPUnit 9.6
+        # and dependencies that predate 8.5.
         include:
           - { php: '8.0', deps: 'lowest' }
           - { php: '8.0', deps: 'highest' }
@@ -96,6 +112,7 @@ jobs:
           - { php: '8.2', deps: 'highest' }
           - { php: '8.3', deps: 'highest' }
           - { php: '8.4', deps: 'highest' }
+          - { php: '8.5', deps: 'highest' }
 
     steps:
       - name: Checkout code
@@ -105,7 +122,7 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring, xml, xmlreader, zlib, dom, tokenizer
+          extensions: ${{ env.PHP_EXTENSIONS }}
           tools: composer:v2
           coverage: none
 

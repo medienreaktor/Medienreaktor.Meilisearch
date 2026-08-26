@@ -1,3 +1,10 @@
+includes:
+    # Teaches PHPStan Flow's two magic APIs: FlowQuery operations and the
+    # findBy<Property> finders on Repository. Deliberately extension.neon and not
+    # the phpstan.neon beside it — that one is the package analysing itself, and
+    # including it would override the level and paths set below.
+    - Build/Kleisli.Flow.PhpStan/extension.neon
+
 parameters:
     level: 5
     paths:

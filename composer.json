@@ -16,8 +16,9 @@
         "http-interop/http-factory-guzzle": "^1.0"
     },
     "require-dev": {
+        "kleisli/flow-phpstan": "^1.0",
         "phpunit/phpunit": "^9.6 || ^10.5 || ^11.5",
-        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan": "^2.2",
         "squizlabs/php_codesniffer": "^4.0"
     },
     "autoload": {
@@ -45,10 +46,12 @@
     },
     "scripts": {
         "test": "./vendor/bin/phpunit",
+        "lint:composer": "@composer validate --strict --no-check-lock",
         "lint:phpstan": "@php vendor/bin/phpstan analyse",
         "lint:phpcs": "./vendor/bin/phpcs --colors",
         "lint:phpcs:fix": "./vendor/bin/phpcbf --colors",
         "lint": [
+            "@lint:composer",
             "@lint:phpcs",
             "@lint:phpstan"
         ]
