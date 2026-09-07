@@ -14,6 +14,49 @@ and above - are not part of the history below.
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-09-07
+
+### Fixed
+
+- **Indexing no longer makes one write request per node.** Meilisearch queues exactly
+  one task per write request, so writing per node made the server's task queue as long
+  as the site: a 17k-node rebuild enqueued about 34,000 tasks, each carrying a single
+  document. Meilisearch's memory grows with that queue, and on a 16 GB host it was
+  killed by the kernel roughly once a day, taking the site down with it while the
+  machine paged. `NodeIndexer` now buffers its writes and `flush()` performs them in
+  batches - one deletion and one addition per batch, whatever the node count. A
+  rebuild of 9,518 documents measured 15 tasks where it previously needed 19,036, and
+  each batch of 1,000 documents is indexed in about the time one single-document task
+  used to take.
+- `flush()` used to be a no-op, so `Neos\ContentRepository\Search`'s promise that it
+  "performs all changes to the index queued up" did not hold, and `nodeindex:build`
+  never called it at all.
+- Writes with nothing to write - an empty document list, an empty identifier list -
+  are no longer sent. Each one cost a queued task and indexed nothing.
+
+### Added
+
+- `nodeindex:build --wait` returns only once Meilisearch reports no unfinished task
+  for the index, and fails if any task the run enqueued did not succeed. Without it a
+  command can finish long before the index it built is readable, which lets a
+  blue/green deployment publish a half-built index. `--timeout` bounds the wait and
+  defaults to 1800 seconds.
+- `nodeindex:build --assume-empty-index` skips deletions, which cannot match anything
+  on an index the caller has just emptied. Halves the tasks of the
+  `createindex`/`flush`/`build` sequence, and is only correct for a caller that did
+  empty the index first.
+- `Medienreaktor.Meilisearch.indexing.batchSize`, defaulting to 1000, caps both the
+  size of a write request and how many tasks an index run adds to the queue.
+- `deleteByIdentifiers()` and `waitForPendingTasks()` on `IndexInterface`. The first
+  clears every variant of a batch of node aggregates with one `IN` filter rather than
+  one request per aggregate; the second is what `--wait` is built on. Neither raises
+  the server or client floor: `IN` has been available since Meilisearch 0.29, and the
+  task queries used by the wait exist throughout `meilisearch-php` `^1.2`.
+- Unit tests for the write-count contract, stated as an equality between two node
+  counts rather than against a fixed number, so it cannot be satisfied by tuning a
+  constant. Also for batch boundaries, for the buffer's per-document coalescing, and
+  for the wait loop's timeout and failed-task paths.
+
 ## [2.10.0] - 2026-08-25
 
 ### Added
@@ -297,7 +340,8 @@ and above - are not part of the history below.
 - Initial release: Meilisearch integration for Neos, with node indexing and a query
   builder.
 
-[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.10.0...HEAD
+[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.11.0...HEAD
+[2.11.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.10.0...2.11.0
 [2.10.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.6.0...2.10.0
 [2.6.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.5.0...2.6.0
 [2.5.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.4...2.5.0

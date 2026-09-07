@@ -25,6 +25,13 @@ use Neos\Flow\Annotations as Flow;
 class NodeIndexer extends AbstractNodeIndexer
 {
     /**
+     * Bounds how many documents may sit in the buffer before it is written out, so the
+     * memory this holds does not grow with the size of the site. Mirrors the index
+     * client's request batch size, since one full buffer becomes one request.
+     */
+    private const DEFAULT_BATCH_SIZE = 1000;
+
+    /**
      * @Flow\Inject
      * @var IndexInterface
      */
@@ -65,6 +72,43 @@ class NodeIndexer extends AbstractNodeIndexer
      * @var string[]
      */
     protected $neededAttributesForIndex;
+
+    /**
+     * @Flow\InjectConfiguration(package="Medienreaktor.Meilisearch", path="indexing")
+     * @var array
+     */
+    protected $indexingSettings = [];
+
+    /**
+     * Documents awaiting the next flush, keyed by document id so that indexing the same
+     * variant twice in one batch writes it once.
+     *
+     * @var array<string, array>
+     */
+    protected $bufferedDocuments = [];
+
+    /**
+     * Document ids awaiting deletion, used as a set.
+     *
+     * @var array<string, bool>
+     */
+    protected $bufferedDocumentDeletions = [];
+
+    /**
+     * Node aggregate identifiers whose stale variants await deletion, used as a set.
+     *
+     * @var array<string, bool>
+     */
+    protected $bufferedIdentifierDeletions = [];
+
+    /**
+     * Whether the index is known to hold no documents, which makes every deletion a
+     * no-op worth skipping. Only a caller that has just emptied the index can know
+     * this, so nothing infers it.
+     *
+     * @var bool
+     */
+    protected $assumeEmptyIndex = false;
 
     public function initializeObject($cause)
     {
@@ -119,9 +163,7 @@ class NodeIndexer extends AbstractNodeIndexer
         // For each dimension combination, extract the node variant properties and fulltext
         $dimensionCombinations = $this->dimensionsService->getDimensionCombinationsForIndexing($node);
         if ($indexAllDimensions && $dimensionCombinations !== []) {
-            $this->indexClient->deleteByFilter([
-                '__identifier = "' . $nodeIdentifier . '"'
-            ]);
+            $this->bufferIdentifierDeletion($nodeIdentifier);
             foreach ($dimensionCombinations as $combination) {
                 if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
                     $documents[] = $nodeVariant;
@@ -134,9 +176,9 @@ class NodeIndexer extends AbstractNodeIndexer
                 if ($this->dimensionsService->combinationFallsBackTo($node->getContext()->getDimensions(), $combination)) {
                     // delete previously indexed variant with same dimensions
                     $dimensionsHash = $this->dimensionsService->hash($combination);
-                    $this->indexClient->deleteDocuments([
+                    $this->bufferDocumentDeletion(
                         $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash)
-                    ]);
+                    );
                     // Index the new node variant
                     if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
                         $documents[] = $nodeVariant;
@@ -151,16 +193,20 @@ class NodeIndexer extends AbstractNodeIndexer
                 ? $this->dimensionsService->hash($effectiveDimensions)
                 : $this->dimensionsService->hashByNode($node);
 
-            $this->indexClient->deleteDocuments([
+            $this->bufferDocumentDeletion(
                 $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash)
-            ]);
+            );
             if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $effectiveDimensions)) {
                 $documents[] = $nodeVariant;
             }
         }
 
-        // Finally, send all node variant documents to the index
-        $this->indexClient->addDocuments($documents);
+        // Buffer all node variant documents; flush() is what reaches the index
+        foreach ($documents as $document) {
+            $this->bufferDocument($document);
+        }
+
+        $this->flushIfBufferIsFull();
     }
 
     /**
@@ -214,7 +260,7 @@ class NodeIndexer extends AbstractNodeIndexer
 
             foreach ($this->neededAttributesForIndex as $key) {
                 if (empty($document[$key])) {
-                    $this->indexClient->deleteDocuments([$identifier]);
+                    $this->bufferDocumentDeletion($identifier);
                     return null;
                 }
             }
@@ -234,15 +280,130 @@ class NodeIndexer extends AbstractNodeIndexer
     public function removeNode(NodeInterface $node): void
     {
         $identifier = $this->generateUniqueNodeIdentifier($this->requireTraversable($node));
-        $this->indexClient->deleteDocuments([$identifier]);
+        $this->bufferDocumentDeletion($identifier);
+        $this->flushIfBufferIsFull();
     }
 
     /**
+     * Write everything buffered so far.
+     *
+     * Meilisearch queues one task per write request, and a queue that grows faster than
+     * the server drains it is what makes a rebuild expensive: writing per node turns
+     * every node into two tasks. Buffering collapses a whole batch into one deletion
+     * and one addition regardless of how many nodes it covers.
+     *
+     * The three groups go out in a fixed order - stale variants by aggregate, then
+     * documents by id, then additions - which is why buffering coalesces per document
+     * id as it goes: it keeps a delete and an add of the same id from being reordered
+     * against each other.
+     *
      * @return void
      */
     public function flush(): void
     {
-        return;
+        $identifierDeletions = array_keys($this->bufferedIdentifierDeletions);
+        $documentDeletions = array_keys($this->bufferedDocumentDeletions);
+        $documents = array_values($this->bufferedDocuments);
+
+        // Cleared up front so that a failing write cannot be retried into a loop by a
+        // caller that flushes again in its error handling.
+        $this->bufferedIdentifierDeletions = [];
+        $this->bufferedDocumentDeletions = [];
+        $this->bufferedDocuments = [];
+
+        // Each group is asked for only when it has something in it. The whole point of
+        // buffering is to stop making writes nobody needs, and flush() runs on every
+        // persisted request whether anything was indexed or not.
+        if ($identifierDeletions !== []) {
+            $this->indexClient->deleteByIdentifiers($identifierDeletions);
+        }
+
+        if ($documentDeletions !== []) {
+            $this->indexClient->deleteDocuments($documentDeletions);
+        }
+
+        if ($documents !== []) {
+            $this->indexClient->addDocuments($documents);
+        }
+    }
+
+    /**
+     * Declare that the index holds no documents, which makes every deletion this
+     * indexer would buffer a no-op. Halves the work of a full rebuild, and is only safe
+     * for a caller that has just emptied the index itself.
+     *
+     * @return void
+     */
+    public function assumeEmptyIndex(): void
+    {
+        $this->assumeEmptyIndex = true;
+    }
+
+    /**
+     * @param array $document
+     * @return void
+     */
+    protected function bufferDocument(array $document): void
+    {
+        $identifier = (string) $document['id'];
+
+        // An addition supersedes a deletion of the same document buffered before it.
+        unset($this->bufferedDocumentDeletions[$identifier]);
+        $this->bufferedDocuments[$identifier] = $document;
+    }
+
+    /**
+     * @param string $documentIdentifier
+     * @return void
+     */
+    protected function bufferDocumentDeletion(string $documentIdentifier): void
+    {
+        if ($this->assumeEmptyIndex) {
+            return;
+        }
+
+        // A deletion supersedes an addition of the same document buffered before it.
+        unset($this->bufferedDocuments[$documentIdentifier]);
+        $this->bufferedDocumentDeletions[$documentIdentifier] = true;
+    }
+
+    /**
+     * @param string $nodeIdentifier
+     * @return void
+     */
+    protected function bufferIdentifierDeletion(string $nodeIdentifier): void
+    {
+        if ($this->assumeEmptyIndex) {
+            return;
+        }
+
+        $this->bufferedIdentifierDeletions[$nodeIdentifier] = true;
+    }
+
+    /**
+     * Flushes once the buffer has reached its size, and only ever between nodes: a node
+     * whose deletions and additions were split across two flushes would leave the index
+     * without it in between.
+     *
+     * @return void
+     */
+    protected function flushIfBufferIsFull(): void
+    {
+        $buffered = count($this->bufferedDocuments)
+            + count($this->bufferedDocumentDeletions)
+            + count($this->bufferedIdentifierDeletions);
+
+        if ($buffered >= $this->batchSize()) {
+            $this->flush();
+        }
+    }
+
+    /**
+     * @return int
+     */
+    protected function batchSize(): int
+    {
+        return max(1, (int) ($this->indexingSettings['batchSize'] ?? self::DEFAULT_BATCH_SIZE));
     }
 
     /**

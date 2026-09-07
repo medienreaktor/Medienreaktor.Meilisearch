@@ -35,6 +35,23 @@ interface IndexInterface
     public function deleteByFilter(array $filter): void;
 
     /**
+     * Delete every indexed variant of the given node aggregates.
+     *
+     * @param array $nodeIdentifiers Node aggregate identifiers
+     * @return void
+     */
+    public function deleteByIdentifiers(array $nodeIdentifiers): void;
+
+    /**
+     * Block until the index has no unfinished task left, failing if any task the
+     * implementation enqueued did not succeed.
+     *
+     * @param int $timeoutInSeconds
+     * @return void
+     */
+    public function waitForPendingTasks(int $timeoutInSeconds): void;
+
+    /**
      * Delete all documents from the index.
      *
      * @return void

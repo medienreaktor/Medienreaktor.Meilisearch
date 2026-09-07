@@ -49,6 +49,13 @@ class NodeIndexCommandController extends CommandController
     protected $dimensionsService;
 
     /**
+     * Long enough for a full rebuild of a large site to drain, short enough that a
+     * wedged queue is reported rather than waited on until the scheduler kills the
+     * command.
+     */
+    private const DEFAULT_WAIT_TIMEOUT_IN_SECONDS = 1800;
+
+    /**
      * @var integer
      */
     protected $indexedNodes = 0;
@@ -81,12 +88,19 @@ class NodeIndexCommandController extends CommandController
     /**
      * Index all nodes.
      *
+     * @param bool $wait Return only once Meilisearch has finished indexing, and fail if it did not succeed
+     * @param int $timeout How long to wait, in seconds; only meaningful together with --wait
+     * @param bool $assumeEmptyIndex Skip deletions, which cannot match anything on an index the caller has just emptied
      * @return void
      * @throws Exception
      */
-    public function buildCommand(): void
+    public function buildCommand(bool $wait = false, int $timeout = self::DEFAULT_WAIT_TIMEOUT_IN_SECONDS, bool $assumeEmptyIndex = false): void
     {
         $this->indexClient->createIndex();
+
+        if ($assumeEmptyIndex) {
+            $this->nodeIndexer->assumeEmptyIndex();
+        }
 
         $dimensionCombinations = $this->dimensionsService->getAllCombinations();
 
@@ -129,8 +143,20 @@ class NodeIndexCommandController extends CommandController
         }
 
         $this->output->progressFinish();
+
+        // Indexing buffers its writes, so nothing is guaranteed to have reached the
+        // index until this returns.
+        $this->nodeIndexer->flush();
+
         $this->outputLine('');
         $this->outputLine('Finished indexing %d nodes.', [$this->indexedNodes]);
+
+        if ($wait) {
+            $this->outputLine('Waiting up to %d seconds for Meilisearch to finish indexing...', [$timeout]);
+            // The indexer's own client, which is the one holding the enqueued tasks.
+            $this->nodeIndexer->getIndexClient()->waitForPendingTasks($timeout);
+            $this->outputLine('Index is up to date.');
+        }
     }
 
     /**

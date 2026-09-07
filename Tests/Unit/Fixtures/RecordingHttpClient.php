@@ -15,6 +15,10 @@ use Psr\Http\Message\ResponseInterface;
  * the assertions here are about the request that leaves the client, and PHPUnit's
  * mock builder is internal API that moves between the major versions this package
  * supports.
+ *
+ * Reading back from Meilisearch - asking whether the queue has drained - needs answers
+ * this default cannot give, so bodies queued in $responses are handed out in order
+ * before it applies.
  */
 final class RecordingHttpClient implements ClientInterface
 {
@@ -23,9 +27,20 @@ final class RecordingHttpClient implements ClientInterface
      */
     public array $requests = [];
 
+    /**
+     * Response bodies to answer with, in order, before falling back to the default.
+     *
+     * @var list<array<string, mixed>>
+     */
+    public array $responses = [];
+
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
         $this->requests[] = $request;
+
+        if ($this->responses !== []) {
+            return new Response(200, ['Content-Type' => 'application/json'], (string) json_encode(array_shift($this->responses)));
+        }
 
         return new Response(202, ['Content-Type' => 'application/json'], (string) json_encode([
             'taskUid' => 1,
@@ -34,5 +49,16 @@ final class RecordingHttpClient implements ClientInterface
             'type' => 'documentDeletion',
             'enqueuedAt' => '2026-01-01T00:00:00Z',
         ]));
+    }
+
+    /**
+     * The paths of every request recorded so far, which is what most assertions about
+     * request shape are actually about.
+     *
+     * @return list<string>
+     */
+    public function paths(): array
+    {
+        return array_map(static fn (RequestInterface $request): string => $request->getUri()->getPath(), $this->requests);
     }
 }

@@ -25,6 +25,10 @@ Medienreaktor:
   Meilisearch:
     enableFulltext: true
     neededAttributesForIndex: []
+    indexing:
+      # Meilisearch queues one task per write request, so this caps both the size of
+      # a request and how many tasks an index run adds to the queue.
+      batchSize: 1000
     client:
       endpoint: ''
       apiKey: ''
