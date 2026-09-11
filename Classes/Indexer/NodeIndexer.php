@@ -401,7 +401,7 @@ class NodeIndexer extends AbstractNodeIndexer
     /**
      * @return int
      */
-    protected function batchSize(): int
+    public function batchSize(): int
     {
         return max(1, (int) ($this->indexingSettings['batchSize'] ?? self::DEFAULT_BATCH_SIZE));
     }

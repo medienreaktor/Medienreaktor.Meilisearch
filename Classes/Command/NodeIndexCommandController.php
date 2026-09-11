@@ -8,6 +8,7 @@ use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Exception;
+use Neos\ContentRepository\Domain\Factory\NodeFactory;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Projection\Content\TraversableNodeInterface;
 use Neos\ContentRepository\Domain\Service\Context;
@@ -16,6 +17,7 @@ use Neos\ContentRepository\Exception\NodeException;
 use Neos\ContentRepository\Search\Exception\IndexingException;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Cli\CommandController;
+use Neos\Flow\Persistence\PersistenceManagerInterface;
 
 /**
  * CLI commands for index building and flushing
@@ -47,6 +49,18 @@ class NodeIndexCommandController extends CommandController
      * @var DimensionsService
      */
     protected $dimensionsService;
+
+    /**
+     * @Flow\Inject
+     * @var NodeFactory
+     */
+    protected $nodeFactory;
+
+    /**
+     * @Flow\Inject
+     * @var PersistenceManagerInterface
+     */
+    protected $persistenceManager;
 
     /**
      * Long enough for a full rebuild of a large site to drain, short enough that a
@@ -88,6 +102,19 @@ class NodeIndexCommandController extends CommandController
     /**
      * Index all nodes.
      *
+     * Nodes are indexed as they are found, not collected first. The collection that
+     * used to precede indexing held a hydrated node for every fulltext root of the
+     * whole site in one array, and every node a Context hands out stays in that
+     * Context's cache for the rest of the run - on a site of ten thousand documents
+     * that alone outgrew a 3 GB limit before a single document had been sent. The
+     * progress bar no longer knows its total up front; the count at the end is what
+     * it always was.
+     *
+     * Memory is released once per write batch: the buffered documents are sent, then
+     * the node caches and Doctrine's identity map are dropped and the cycle collector
+     * runs. Safe in this command because it only reads nodes and writes to
+     * Meilisearch - nothing it detaches is ever persisted again.
+     *
      * @param bool $wait Return only once Meilisearch has finished indexing, and fail if it did not succeed
      * @param int $timeout How long to wait, in seconds; only meaningful together with --wait
      * @param bool $assumeEmptyIndex Skip deletions, which cannot match anything on an index the caller has just emptied
@@ -104,28 +131,13 @@ class NodeIndexCommandController extends CommandController
 
         $dimensionCombinations = $this->dimensionsService->getAllCombinations();
 
-        $this->outputLine('Collecting indexable nodes...');
-        $nodes = [];
+        $this->outputLine('Indexing nodes...');
+        $this->output->progressStart();
 
-        if ($dimensionCombinations === []) {
-            $context = $this->contextFactory->create(['workspaceName' => 'live']);
-            $this->collectNodes($this->traversableRootNode($context), $nodes);
-        } else {
-            foreach ($dimensionCombinations as $dimensions) {
-                $context = $this->contextFactory->create([
-                    'workspaceName' => 'live',
-                    'dimensions' => $dimensions
-                ]);
-                $this->collectNodes($this->traversableRootNode($context), $nodes, false, false, $dimensions);
-            }
-        }
+        $releaseEvery = max(1, $this->nodeIndexer->batchSize());
+        $sinceRelease = 0;
 
-        $total = count($nodes);
-
-        $this->outputLine('Indexing %d nodes...', [$total]);
-        $this->output->progressStart($total);
-
-        foreach ($nodes as $nodeToIndex) {
+        foreach ($this->indexableNodes($dimensionCombinations) as $nodeToIndex) {
             $node = $nodeToIndex['node'];
             try {
                 $this->nodeIndexer->indexNode(
@@ -140,6 +152,11 @@ class NodeIndexCommandController extends CommandController
             }
             $this->indexedNodes++;
             $this->output->progressAdvance();
+
+            if (++$sinceRelease >= $releaseEvery) {
+                $this->releaseMemory($node);
+                $sinceRelease = 0;
+            }
         }
 
         $this->output->progressFinish();
@@ -160,24 +177,51 @@ class NodeIndexCommandController extends CommandController
     }
 
     /**
-     * Recursively collects all fulltext root nodes into a flat array so that
-     * the total count is known before indexing begins.
+     * Every fulltext root of the site, one at a time, in the order the collection used
+     * to list them: across all dimension combinations, or the plain live context when
+     * the site has none.
+     *
+     * @param list<array> $dimensionCombinations
+     * @return \Generator<int, array{node: NodeInterface&TraversableNodeInterface, indexAllDimensions: bool, indexFallbackDimensions: bool, targetDimensionCombination: array}>
+     * @throws Exception
+     */
+    protected function indexableNodes(array $dimensionCombinations): \Generator
+    {
+        if ($dimensionCombinations === []) {
+            $context = $this->contextFactory->create(['workspaceName' => 'live']);
+            yield from $this->fulltextRootsBelow($this->traversableRootNode($context));
+            return;
+        }
+
+        foreach ($dimensionCombinations as $dimensions) {
+            $context = $this->contextFactory->create([
+                'workspaceName' => 'live',
+                'dimensions' => $dimensions
+            ]);
+            yield from $this->fulltextRootsBelow($this->traversableRootNode($context), false, false, $dimensions);
+        }
+    }
+
+    /**
+     * Recursively yields the given node, if it is a fulltext root, and every fulltext
+     * root below it - depth first, a node before its children, which is the order
+     * the collection this replaces produced.
      *
      * @param NodeInterface&TraversableNodeInterface $currentNode
-     * @param list<array{node: NodeInterface&TraversableNodeInterface, indexAllDimensions: bool, indexFallbackDimensions: bool, targetDimensionCombination: array}> $nodes
      * @param bool $indexAllDimensions
      * @param bool $indexFallbackDimensions
      * @param array $targetDimensionCombination
+     * @return \Generator<int, array{node: NodeInterface&TraversableNodeInterface, indexAllDimensions: bool, indexFallbackDimensions: bool, targetDimensionCombination: array}>
+     * @throws Exception
      */
-    protected function collectNodes(
+    protected function fulltextRootsBelow(
         NodeInterface $currentNode,
-        array &$nodes,
         bool $indexAllDimensions = true,
         bool $indexFallbackDimensions = true,
         array $targetDimensionCombination = []
-    ): void {
+    ): \Generator {
         if (self::isFulltextRoot($currentNode)) {
-            $nodes[] = [
+            yield [
                 'node' => $currentNode,
                 'indexAllDimensions' => $indexAllDimensions,
                 'indexFallbackDimensions' => $indexFallbackDimensions,
@@ -186,8 +230,35 @@ class NodeIndexCommandController extends CommandController
         }
 
         foreach ($currentNode->findChildNodes() as $childNode) {
-            $this->collectNodes($this->nodeIndexer->requireTraversable($childNode), $nodes, $indexAllDimensions, $indexFallbackDimensions, $targetDimensionCombination);
+            yield from $this->fulltextRootsBelow($this->nodeIndexer->requireTraversable($childNode), $indexAllDimensions, $indexFallbackDimensions, $targetDimensionCombination);
         }
+    }
+
+    /**
+     * Sends what is buffered, then lets go of every node this run has touched.
+     *
+     * The walk holds one Context for a whole dimension combination, through the node
+     * on every level of its recursion. The factory forgets that Context on its first
+     * reset, so relying on getInstances() alone would flush it once and then never
+     * again while it keeps caching every node the walk creates - it is reached here
+     * through the node just indexed instead. The factory's own instances are the ones
+     * the indexer creates for dimension fallbacks, and they are dropped as well.
+     *
+     * clearState() last among the reference cuts and the collector after it: the
+     * entities point at each other, so nothing short of a cycle walk frees them.
+     */
+    protected function releaseMemory(NodeInterface $lastIndexedNode): void
+    {
+        $this->nodeIndexer->flush();
+
+        $lastIndexedNode->getContext()->getFirstLevelNodeCache()->flush();
+        foreach ($this->contextFactory->getInstances() as $context) {
+            $context->getFirstLevelNodeCache()->flush();
+        }
+        $this->contextFactory->reset();
+        $this->nodeFactory->reset();
+        $this->persistenceManager->clearState();
+        gc_collect_cycles();
     }
 
     /**
