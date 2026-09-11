@@ -14,6 +14,27 @@ and above - are not part of the history below.
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-09-11
+
+### Fixed
+
+- **`nodeindex:build` no longer collects the whole site before indexing it.** It used to
+  recurse the entire tree first and hold a hydrated node for every fulltext root in one
+  array, so that the progress bar could know its total - and every node a Context hands
+  out stays in that Context's cache for the rest of the run. On a site of 9,541
+  documents that alone outgrew a 3 GB `memory_limit` before a single document had been
+  sent, while the write side had already been batched in 2.11.0. Nodes are now indexed
+  as the walk finds them, in the same order, and once per write batch the buffered
+  documents are sent and the node caches, Doctrine's identity map and the cycle
+  collector are dealt with - safe here because the command only reads nodes and writes
+  to Meilisearch. The same 9,541-document rebuild now completes within 1 GB. The
+  progress bar runs without a total; the final count is unchanged.
+
+### Changed
+
+- `NodeIndexer::batchSize()` is public, so the build command releases memory on the
+  same boundary the indexer flushes on, from the one `indexing.batchSize` setting.
+
 ## [2.11.0] - 2026-09-07
 
 ### Fixed
