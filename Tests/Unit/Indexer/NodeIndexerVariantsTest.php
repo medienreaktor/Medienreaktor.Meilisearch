@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Tests\Unit\Indexer;
 
 use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
+use Medienreaktor\Meilisearch\Tests\Unit\Fixtures\ConstrainedPresetSource;
+use Medienreaktor\Meilisearch\Tests\Unit\Fixtures\DetachedNode;
 use Medienreaktor\Meilisearch\Tests\Unit\Fixtures\LiveWorkspaceNodeIndexer;
 use Medienreaktor\Meilisearch\Tests\Unit\Fixtures\RecordingIndex;
-use Neos\ContentRepository\Domain\Model\Node;
-use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Domain\Model\NodeType;
-use Neos\ContentRepository\Domain\NodeAggregate\NodeAggregateIdentifier;
-use Neos\ContentRepository\Domain\Service\Context;
+use Neos\ContentRepository\Domain\Service\ContentDimensionCombinator;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -23,9 +21,17 @@ use PHPUnit\Framework\TestCase;
  */
 class NodeIndexerVariantsTest extends TestCase
 {
-    private const COMBINATIONS_FALLING_BACK_TO = [
-        'de' => [['language' => ['de']]],
-        'en' => [['language' => ['en']], ['language' => ['en_AT', 'en']]],
+    /**
+     * @var array<string, array{presets: array<string, array{values: array<int, string>}>}>
+     */
+    private const PRESETS = [
+        'language' => [
+            'presets' => [
+                'de' => ['values' => ['de']],
+                'en' => ['values' => ['en']],
+                'en_AT' => ['values' => ['en_AT', 'en']],
+            ],
+        ],
     ];
 
     private RecordingIndex $index;
@@ -38,20 +44,17 @@ class NodeIndexerVariantsTest extends TestCase
     {
         $this->index = new RecordingIndex();
         $this->nodeIndexer = new LiveWorkspaceNodeIndexer();
-        $this->dimensionsService = $this->createPartialMock(DimensionsService::class, ['getDimensionCombinationsForIndexing']);
-        $this->dimensionsService->method('getDimensionCombinationsForIndexing')->willReturnCallback(
-            static fn(NodeInterface $node): array => self::COMBINATIONS_FALLING_BACK_TO[$node->getDimensions()['language'][0]]
-        );
+        $this->dimensionsService = $this->dimensionsServiceFor(self::PRESETS);
 
-        $this->inject('indexClient', $this->index);
-        $this->inject('dimensionsService', $this->dimensionsService);
+        $this->seed($this->nodeIndexer, 'indexClient', $this->index);
+        $this->seed($this->nodeIndexer, 'dimensionsService', $this->dimensionsService);
     }
 
     public function testIndexingOneVariantKeepsTheVariantsOfUnrelatedDimensions(): void
     {
         $this->nodeIndexer->visibleInLive = ['de' => true, 'en' => true, 'en_AT' => true];
 
-        $this->nodeIndexer->indexNode($this->documentNode('de', true), 'live');
+        $this->nodeIndexer->indexNode($this->document('de'), 'live');
         $this->nodeIndexer->flush();
 
         self::assertSame(['addDocuments'], $this->index->calledMethods());
@@ -62,7 +65,7 @@ class NodeIndexerVariantsTest extends TestCase
     {
         $this->nodeIndexer->visibleInLive = ['de' => true];
 
-        $this->nodeIndexer->indexNode($this->documentNode('en', false), 'live');
+        $this->nodeIndexer->indexNode($this->document('en', false), 'live');
         $this->nodeIndexer->flush();
 
         self::assertSame(['deleteDocuments'], $this->index->calledMethods());
@@ -80,7 +83,7 @@ class NodeIndexerVariantsTest extends TestCase
     {
         $this->nodeIndexer->visibleInLive = ['de' => true, 'en' => true, 'en_AT' => true];
 
-        $this->nodeIndexer->indexNode($this->documentNode('en', false));
+        $this->nodeIndexer->indexNode($this->document('en', false));
         $this->nodeIndexer->flush();
 
         self::assertSame(['addDocuments'], $this->index->calledMethods());
@@ -92,7 +95,7 @@ class NodeIndexerVariantsTest extends TestCase
         // The Austrian variant exists on its own, so only English itself disappears.
         $this->nodeIndexer->visibleInLive = ['de' => true, 'en_AT' => true];
 
-        $this->nodeIndexer->removeNode($this->documentNode('en', true));
+        $this->nodeIndexer->removeNode($this->document('en'));
         $this->nodeIndexer->flush();
 
         self::assertSame(['deleteDocuments', 'addDocuments'], $this->index->calledMethods());
@@ -103,8 +106,7 @@ class NodeIndexerVariantsTest extends TestCase
     public function testRemovingContentRebuildsTheDocumentItBelongsTo(): void
     {
         $this->nodeIndexer->visibleInLive = ['de' => true, 'en' => true, 'en_AT' => true];
-        $content = $this->node('content', 'en', false, true);
-        $content->method('findParentNode')->willReturn($this->documentNode('en', true));
+        $content = new DetachedNode('content', ['language' => ['en']], false, true, $this->document('en'));
 
         $this->nodeIndexer->removeNode($content);
         $this->nodeIndexer->flush();
@@ -117,47 +119,19 @@ class NodeIndexerVariantsTest extends TestCase
 
     public function testADimensionlessSiteReplacesItsOnlyDocument(): void
     {
-        $dimensionsService = $this->createPartialMock(DimensionsService::class, ['getDimensionCombinationsForIndexing']);
-        $dimensionsService->method('getDimensionCombinationsForIndexing')->willReturn([[]]);
-        $this->inject('dimensionsService', $dimensionsService);
+        $this->seed($this->nodeIndexer, 'dimensionsService', $this->dimensionsServiceFor([]));
         $this->nodeIndexer->visibleInLive = ['default' => true];
 
-        $this->nodeIndexer->indexNode($this->documentNode('de', true), 'live');
+        $this->nodeIndexer->indexNode(new DetachedNode('document', [], true), 'live');
         $this->nodeIndexer->flush();
 
         self::assertSame([[]], $this->nodeIndexer->extractedCombinations);
         self::assertSame(['document_default'], array_column($this->index->argumentOf('addDocuments'), 'id'));
     }
 
-    /**
-     * @return Node&\PHPUnit\Framework\MockObject\MockObject
-     */
-    private function documentNode(string $language, bool $visible): Node
+    private function document(string $language, bool $visible = true): DetachedNode
     {
-        return $this->node('document', $language, true, $visible);
-    }
-
-    /**
-     * @return Node&\PHPUnit\Framework\MockObject\MockObject
-     */
-    private function node(string $identifier, string $language, bool $fulltextRoot, bool $visible): Node
-    {
-        $nodeType = $this->createMock(NodeType::class);
-        $nodeType->method('hasConfiguration')->with('search')->willReturn($fulltextRoot);
-        $nodeType->method('getConfiguration')->with('search')->willReturn(['fulltext' => ['isRoot' => $fulltextRoot]]);
-
-        $node = $this->createMock(Node::class);
-        $node->method('getNodeType')->willReturn($nodeType);
-        $node->method('getNodeAggregateIdentifier')->willReturn(NodeAggregateIdentifier::fromString($identifier));
-        $node->method('isVisible')->willReturn($visible);
-        $node->method('getDimensions')->willReturn(['language' => [$language]]);
-
-        $context = $this->createMock(Context::class);
-        $context->method('getDimensions')->willReturn(['language' => [$language]]);
-        $context->method('getTargetDimensions')->willReturn(['language' => $language]);
-        $node->method('getContext')->willReturn($context);
-
-        return $node;
+        return new DetachedNode('document', ['language' => [$language]], true, $visible);
     }
 
     /**
@@ -169,12 +143,25 @@ class NodeIndexerVariantsTest extends TestCase
     }
 
     /**
+     * @param array<string, array{presets: array<string, array{values: array<int, string>}>}> $presets
+     */
+    private function dimensionsServiceFor(array $presets): DimensionsService
+    {
+        $combinator = new ContentDimensionCombinator();
+        $dimensionsService = new DimensionsService();
+        $this->seed($combinator, 'contentDimensionPresetSource', new ConstrainedPresetSource($presets));
+        $this->seed($dimensionsService, 'contentDimensionCombinator', $combinator);
+
+        return $dimensionsService;
+    }
+
+    /**
      * @param mixed $value
      */
-    private function inject(string $property, $value): void
+    private function seed(object $object, string $propertyName, $value): void
     {
-        $reflection = new \ReflectionProperty(LiveWorkspaceNodeIndexer::class, $property);
-        $reflection->setAccessible(true);
-        $reflection->setValue($this->nodeIndexer, $value);
+        $property = (new \ReflectionObject($object))->getProperty($propertyName);
+        $property->setAccessible(true);
+        $property->setValue($object, $value);
     }
 }
