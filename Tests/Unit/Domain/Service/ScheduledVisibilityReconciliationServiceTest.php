@@ -40,11 +40,6 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
      */
     private $dimensionHashes = [];
 
-    /**
-     * @var array<int, array<string, string[]>>
-     */
-    private $dimensionCombinations = [];
-
     protected function setUp(): void
     {
         $this->contextFactory = $this->createMock(ContextFactoryInterface::class);
@@ -52,9 +47,6 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
         $this->dimensionsService->method('hashByNode')->willReturnCallback(
             fn(NodeInterface $node): string => $this->dimensionHashes[spl_object_id($node)]
                 ?? 'hash-' . $node->getIdentifier()
-        );
-        $this->dimensionsService->method('getDimensionCombinationsForIndexing')->willReturnCallback(
-            fn(): array => $this->dimensionCombinations
         );
 
         $this->service = new TestableScheduledVisibilityReconciliationService();
@@ -174,43 +166,31 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
         self::assertSame('remove', $operations['child-document:hash-child-document']['action']);
     }
 
-    public function testHiddenDocumentRemovesEveryTargetDimensionUsingFallback(): void
+    /**
+     * The indexer expands a removal to every combination falling back to the variant,
+     * so resolving those combinations here would only repeat that work per combination.
+     */
+    public function testHiddenDocumentLeavesTheFallbackExpansionToTheIndexer(): void
     {
         $hiddenDocument = $this->createNode('document', '/sites/example/document', false, true);
-        $germanVariant = $this->createNode('document', '/sites/example/document', false, true);
-        $englishFallbackVariant = $this->createNode('document', '/sites/example/document', false, true);
-        $this->dimensionHashes[spl_object_id($germanVariant)] = 'de-hash';
-        $this->dimensionHashes[spl_object_id($englishFallbackVariant)] = 'en-hash';
-        $this->dimensionCombinations = [
-            ['language' => ['de']],
-            ['language' => ['en']],
-        ];
+        $this->dimensionHashes[spl_object_id($hiddenDocument)] = 'de-hash';
 
         $maintenanceContext = $this->createContext([
             '/sites/example/document' => $hiddenDocument,
         ]);
         $visibleContext = $this->createContext([]);
-        $germanContext = $this->createContext([], ['document' => $germanVariant]);
-        $englishContext = $this->createContext([], ['document' => $englishFallbackVariant]);
-        $this->contextFactory->expects(self::exactly(4))
+        $this->contextFactory->expects(self::exactly(2))
             ->method('create')
-            ->willReturnOnConsecutiveCalls(
-                $maintenanceContext,
-                $visibleContext,
-                $germanContext,
-                $englishContext
-            );
+            ->willReturnOnConsecutiveCalls($maintenanceContext, $visibleContext);
 
         $operations = $this->service->collectOperations(
             $this->createNodeData('/sites/example/document'),
             new \DateTimeImmutable('2026-07-16T12:00:00+02:00')
         );
 
-        self::assertCount(2, $operations);
+        self::assertCount(1, $operations);
         self::assertSame('remove', $operations['document:de-hash']['action']);
-        self::assertSame($germanVariant, $operations['document:de-hash']['node']);
-        self::assertSame('remove', $operations['document:en-hash']['action']);
-        self::assertSame($englishFallbackVariant, $operations['document:en-hash']['node']);
+        self::assertSame($hiddenDocument, $operations['document:de-hash']['node']);
     }
 
     /**
@@ -261,16 +241,12 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
 
     /**
      * @param array<string, NodeInterface> $nodesByPath
-     * @param array<string, NodeInterface> $nodesByIdentifier
      */
-    private function createContext(array $nodesByPath, array $nodesByIdentifier = []): Context
+    private function createContext(array $nodesByPath): Context
     {
         $context = $this->createMock(Context::class);
         $context->method('getNode')->willReturnCallback(
             static fn(string $path): ?NodeInterface => $nodesByPath[$path] ?? null
-        );
-        $context->method('getNodeByIdentifier')->willReturnCallback(
-            static fn(string $identifier): ?NodeInterface => $nodesByIdentifier[$identifier] ?? null
         );
         return $context;
     }

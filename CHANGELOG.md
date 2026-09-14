@@ -14,6 +14,26 @@ and above - are not part of the history below.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Indexing one variant of a node no longer removes the variants of other dimensions.**
+  `indexNode()` deleted every document of the node aggregate but re-added only the
+  node's own dimension combination and the combinations falling back to it, so
+  publishing or even editing the German variant of a page removed its English one from
+  the index. It now replaces exactly those combinations and leaves the others alone.
+- **Hiding or removing a variant also removes it from the combinations falling back to
+  it.** `removeNode()` deleted a single document, so a page hidden in English stayed
+  findable in every locale falling back to English. It now replaces the same set of
+  combinations from the live workspace, which also lets a combination fall back to the
+  next variant, and it rebuilds the document a removed content node belonged to.
+- A variant hidden only in a user workspace no longer removes the live document.
+
+### Changed
+
+- `NodeIndexer::replaceVariants()` is public, so deferred indexers can replay a removal
+  after the node is gone. The reconciliation service no longer resolves fallback
+  combinations itself.
+
 ## [2.13.0] - 2026-09-19
 
 ### Fixed

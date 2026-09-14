@@ -137,11 +137,13 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
     }
 
     /**
-     * Add or update a node in the index with all node variants.
+     * Add or update a node in the index: the document of its own dimension combination
+     * and of every combination falling back to it. Documents of unrelated combinations,
+     * such as another language, are left alone.
      *
      * @param NodeInterface $node
      * @param string $targetWorkspace
-     * @param bool $indexAllDimensions
+     * @param bool $indexAllDimensions Together with $indexFallbackDimensions: whether to replace the fallback combinations too
      * @param bool $indexFallbackDimensions Whether to index dimensions that fall back to the current nodes dimensions
      * @param array $targetDimensionCombination Optional: Force indexing with this dimension combination (for shine-through scenarios)
      * @return void
@@ -174,29 +176,8 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
 
         // For each dimension combination, extract the node variant properties and fulltext
         $dimensionCombinations = $this->dimensionsService->getDimensionCombinationsForIndexing($node);
-        if ($indexAllDimensions && $dimensionCombinations !== []) {
-            $this->bufferIdentifierDeletion($nodeIdentifier);
-            foreach ($dimensionCombinations as $combination) {
-                if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
-                    $documents[] = $nodeVariant;
-                }
-            }
-        } elseif ($indexFallbackDimensions && $dimensionCombinations !== []) {
-            // Index only the current dimension and all dimensions that fall back to the current nodes dimensions.
-            foreach ($dimensionCombinations as $combination) {
-                // Check if current dimension and all dimensions that fall back to the current nodes dimensions
-                if ($this->dimensionsService->combinationFallsBackTo($node->getContext()->getDimensions(), $combination)) {
-                    // delete previously indexed variant with same dimensions
-                    $dimensionsHash = $this->dimensionsService->hash($combination);
-                    $this->bufferDocumentDeletion(
-                        $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash)
-                    );
-                    // Index the new node variant
-                    if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
-                        $documents[] = $nodeVariant;
-                    }
-                }
-            }
+        if (($indexAllDimensions || $indexFallbackDimensions) && $dimensionCombinations !== []) {
+            $this->replaceVariants($nodeIdentifier, $dimensionCombinations);
         } else {
             // Index only the current dimension combination without any fallbacks
             // Use targetDimensionCombination if provided (for shine-through/fallback scenarios)
@@ -291,7 +272,39 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
      */
     public function removeNode(NodeInterface $node): void
     {
-        $this->removeDocumentByIdentifier($this->generateUniqueNodeIdentifier($this->requireTraversable($node)));
+        $node = $this->requireTraversable($node);
+        $fulltextRoot = $this->findFulltextRoot($node) ?? $node;
+
+        $this->replaceVariants(
+            (string) $fulltextRoot->getNodeAggregateIdentifier(),
+            $this->dimensionsService->getDimensionCombinationsForIndexing($fulltextRoot)
+        );
+        $this->flushIfBufferIsFull();
+    }
+
+    /**
+     * Replace the documents of the given combinations with what the live workspace shows
+     * in each of them. A combination that no longer resolves to a visible variant keeps
+     * only its deletion.
+     *
+     * Public for deferred indexers: they can persist the aggregate identifier and the
+     * combinations while the node still exists, and replay the removal after its
+     * NodeData is gone.
+     *
+     * @param string $nodeIdentifier
+     * @param array $dimensionCombinations
+     * @return void
+     */
+    public function replaceVariants(string $nodeIdentifier, array $dimensionCombinations): void
+    {
+        foreach ($dimensionCombinations as $combination) {
+            $this->bufferDocumentDeletion(
+                $this->generateDocumentIdentifier($nodeIdentifier, $this->dimensionsService->hash($combination))
+            );
+            if ($document = $this->extractNodeVariant($nodeIdentifier, $combination)) {
+                $this->bufferDocument($document);
+            }
+        }
     }
 
     /**

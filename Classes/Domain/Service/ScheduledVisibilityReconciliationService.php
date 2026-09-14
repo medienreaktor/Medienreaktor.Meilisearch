@@ -206,12 +206,8 @@ class ScheduledVisibilityReconciliationService
                 continue;
             }
 
-            foreach ($this->getRemovalVariants($invisibleRoot, $now) as $removalVariant) {
-                $operations[$this->operationKey($removalVariant)] = [
-                    'action' => 'remove',
-                    'node' => $removalVariant,
-                ];
-            }
+            // The indexer expands a removal to every combination falling back to the variant.
+            $operations[$key] = ['action' => 'remove', 'node' => $invisibleRoot];
         }
     }
 
@@ -260,39 +256,6 @@ class ScheduledVisibilityReconciliationService
     protected function getParentNode(NodeInterface $node): ?NodeInterface
     {
         return $node->getParent();
-    }
-
-    /**
-     * Expand a removal to every target dimension which can currently fall
-     * back to this node variant. These are the document IDs created by the
-     * default indexNode(..., indexAllDimensions: true) path.
-     *
-     * @return NodeInterface[]
-     */
-    protected function getRemovalVariants(NodeInterface $node, \DateTimeInterface $now): array
-    {
-        $dimensionCombinations = $this->dimensionsService->getDimensionCombinationsForIndexing($node);
-        if ($dimensionCombinations === []) {
-            return [$node];
-        }
-
-        $variants = [];
-        foreach ($dimensionCombinations as $dimensionCombination) {
-            $context = $this->contextFactory->create([
-                'workspaceName' => 'live',
-                'currentDateTime' => $now,
-                'dimensions' => $dimensionCombination,
-                'invisibleContentShown' => true,
-                'removedContentShown' => false,
-                'inaccessibleContentShown' => true,
-            ]);
-            $variant = $context->getNodeByIdentifier($node->getIdentifier());
-            if ($variant instanceof NodeInterface) {
-                $variants[$this->operationKey($variant)] = $variant;
-            }
-        }
-
-        return $variants !== [] ? array_values($variants) : [$node];
     }
 
     protected function operationKey(NodeInterface $node): string
