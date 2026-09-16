@@ -44,6 +44,8 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
     {
         $this->contextFactory = $this->createMock(ContextFactoryInterface::class);
         $this->dimensionsService = $this->createMock(DimensionsService::class);
+        $this->dimensionsService->method('getAllCombinations')->willReturn([['language' => ['de']]]);
+        $this->dimensionsService->method('combinationFallsBackTo')->willReturn(true);
         $this->dimensionsService->method('hashByNode')->willReturnCallback(
             fn(NodeInterface $node): string => $this->dimensionHashes[spl_object_id($node)]
                 ?? 'hash-' . $node->getIdentifier()
@@ -166,11 +168,7 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
         self::assertSame('remove', $operations['child-document:hash-child-document']['action']);
     }
 
-    /**
-     * The indexer expands a removal to every combination falling back to the variant,
-     * so resolving those combinations here would only repeat that work per combination.
-     */
-    public function testHiddenDocumentLeavesTheFallbackExpansionToTheIndexer(): void
+    public function testHiddenDocumentRetainsItsTargetCombination(): void
     {
         $hiddenDocument = $this->createNode('document', '/sites/example/document', false, true);
         $this->dimensionHashes[spl_object_id($hiddenDocument)] = 'de-hash';
@@ -191,6 +189,7 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
         self::assertCount(1, $operations);
         self::assertSame('remove', $operations['document:de-hash']['action']);
         self::assertSame($hiddenDocument, $operations['document:de-hash']['node']);
+        self::assertSame(['language' => ['de']], $operations['document:de-hash']['combination']);
     }
 
     /**

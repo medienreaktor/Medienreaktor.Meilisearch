@@ -1,0 +1,25 @@
+'Medienreaktor.Meilisearch.Testing:Document':
+  superTypes:
+    'Neos.Neos:Document': true
+  constraints:
+    nodeTypes:
+      '*': true
+
+'Medienreaktor.Meilisearch.Testing:ExcludedDocument':
+  superTypes:
+    'Medienreaktor.Meilisearch.Testing:Document': true
+  search:
+    fulltext:
+      isRoot: false
+
+'Medienreaktor.Meilisearch.Testing:Content':
+  superTypes:
+    'Neos.Neos:Content': true
+  search:
+    fulltext:
+      enable: true
+  properties:
+    text:
+      type: string
+      search:
+        fulltextExtractor: '${Indexing.extractHtmlTags(value)}'

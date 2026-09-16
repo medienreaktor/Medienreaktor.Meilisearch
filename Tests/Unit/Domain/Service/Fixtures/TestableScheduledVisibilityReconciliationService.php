@@ -23,7 +23,7 @@ class TestableScheduledVisibilityReconciliationService extends ScheduledVisibili
     }
 
     /**
-     * @return array<string, array{action: string, node: NodeInterface}>
+     * @return array<string, array{action: string, node: NodeInterface, combination: array}>
      */
     public function collectOperations(NodeData $nodeData, \DateTimeInterface $now): array
     {

@@ -212,15 +212,18 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
     protected function extractNodeVariant(string $nodeIdentifier, array $dimensionCombination = []): ?array
     {
         if ($dimensionCombination !== []) {
-            $context = $this->contextFactory->create(['workspaceName' => 'live', 'dimensions' => $dimensionCombination]);
+            $context = $this->contextFactory->create(['workspaceName' => 'live', 'dimensions' => $dimensionCombination, 'currentDateTime' => new \DateTimeImmutable()]);
         } else {
-            $context = $this->contextFactory->create(['workspaceName' => 'live']);
+            $context = $this->contextFactory->create(['workspaceName' => 'live', 'currentDateTime' => new \DateTimeImmutable()]);
         }
 
         $node = $context->getNodeByIdentifier($nodeIdentifier);
 
         if ($node !== null) {
             $node = $this->requireTraversable($node);
+            if (!self::isFulltextRoot($node) || !$this->isNodeAndAncestorsVisible($node)) {
+                return null;
+            }
             // Use dimensionCombination for hash when provided (handles fallback/shine-through)
             // This ensures content visible in English is indexed with English hash even if
             // the underlying node is German
@@ -532,7 +535,7 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
      * @param NodeInterface $node
      * @return bool
      */
-    protected static function isFulltextRoot(NodeInterface $node): bool
+    public static function isFulltextRoot(NodeInterface $node): bool
     {
         if ($node->getNodeType()->hasConfiguration('search')) {
             $searchSettingsForNode = $node->getNodeType()->getConfiguration('search');
@@ -542,6 +545,47 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
         }
 
         return false;
+    }
+
+    public function isNodeAndAncestorsVisible(NodeInterface $node): bool
+    {
+        $context = $node->getContext();
+        if (!$context->isInvisibleContentShown() || !$context->isInaccessibleContentShown() || !$context->isRemovedContentShown()) {
+            // A public context filters hidden parents out of getParent(), which would
+            // incorrectly make an invisible rootline look as if it ended here.
+            $maintenanceContext = $this->contextFactory->create(array_merge($context->getProperties(), [
+                'invisibleContentShown' => true,
+                'inaccessibleContentShown' => true,
+                'removedContentShown' => true,
+            ]));
+            $node = $maintenanceContext->getNodeByIdentifier($node->getIdentifier());
+            if ($node === null) {
+                return false;
+            }
+        }
+        while (true) {
+            if ($node->isRemoved() || !$node->isVisible() || !$node->isAccessible()) {
+                return false;
+            }
+            try {
+                $node = $this->requireTraversable($this->requireTraversable($node)->findParentNode());
+            } catch (NodeException $exception) {
+                return $node->getPath() === '/';
+            }
+        }
+    }
+
+    /** @return array<string, NodeInterface> */
+    public function collectFulltextRoots(NodeInterface $node): array
+    {
+        $roots = [];
+        if (self::isFulltextRoot($node)) {
+            $roots[$node->getIdentifier()] = $node;
+        }
+        foreach ($node->getChildNodes() as $child) {
+            $roots += $this->collectFulltextRoots($child);
+        }
+        return $roots;
     }
 
     protected function extractPropertiesAndFulltext(NodeInterface $node, array &$fulltextData, \Closure $nonIndexedPropertyErrorHandler = null): array

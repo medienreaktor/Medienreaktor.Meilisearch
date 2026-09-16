@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Domain\Service;
 
 use Medienreaktor\Meilisearch\Exception;
+use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Neos\ContentRepository\Domain\Model\NodeData;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Model\Workspace;
@@ -94,16 +95,19 @@ class ScheduledVisibilityReconciliationService
         $removeOperations = 0;
 
         foreach ($operations as $operation) {
+            if (!$dryRun && $this->nodeIndexer instanceof NodeIndexer) {
+                $this->nodeIndexer->replaceVariants($operation['node']->getIdentifier(), [$operation['combination']]);
+            }
             if ($operation['action'] === 'index') {
                 $indexOperations++;
-                if (!$dryRun) {
+                if (!$dryRun && !$this->nodeIndexer instanceof NodeIndexer) {
                     $this->nodeIndexer->indexNode($operation['node'], 'live');
                 }
                 continue;
             }
 
             $removeOperations++;
-            if (!$dryRun) {
+            if (!$dryRun && !$this->nodeIndexer instanceof NodeIndexer) {
                 $this->nodeIndexer->removeNode($operation['node']);
             }
         }
@@ -162,17 +166,30 @@ class ScheduledVisibilityReconciliationService
     }
 
     /**
-     * @param array<string, array{action: string, node: NodeInterface}> $operations
+     * @param array<string, array{action: string, node: NodeInterface, combination: array}> $operations
      */
     protected function collectOperationsForScheduledNode(
         NodeData $nodeData,
         \DateTimeInterface $now,
         array &$operations
     ): void {
+        foreach ($this->dimensionsService->getAllCombinations() ?: [[]] as $combination) {
+            if ($this->dimensionsService->combinationFallsBackTo($nodeData->getDimensionValues(), $combination)) {
+                $this->collectOperationsInCombination($nodeData, $now, $combination, $operations);
+            }
+        }
+    }
+
+    protected function collectOperationsInCombination(
+        NodeData $nodeData,
+        \DateTimeInterface $now,
+        array $combination,
+        array &$operations
+    ): void {
         $contextProperties = [
             'workspaceName' => 'live',
             'currentDateTime' => $now,
-            'dimensions' => $nodeData->getDimensionValues(),
+            'dimensions' => $combination,
             'removedContentShown' => false,
         ];
         $maintenanceContext = $this->contextFactory->create(array_merge($contextProperties, [
@@ -202,12 +219,11 @@ class ScheduledVisibilityReconciliationService
                 if (!$visibleRoot instanceof NodeInterface || !self::isFulltextRoot($visibleRoot)) {
                     continue;
                 }
-                $operations[$key] = ['action' => 'index', 'node' => $visibleRoot];
+                $operations[$key] = ['action' => 'index', 'node' => $visibleRoot, 'combination' => $combination];
                 continue;
             }
 
-            // The indexer expands a removal to every combination falling back to the variant.
-            $operations[$key] = ['action' => 'remove', 'node' => $invisibleRoot];
+            $operations[$key] = ['action' => 'remove', 'node' => $invisibleRoot, 'combination' => $combination];
         }
     }
 
@@ -216,6 +232,12 @@ class ScheduledVisibilityReconciliationService
      */
     protected function collectFulltextRoots(NodeInterface $node, array &$roots): void
     {
+        if ($this->nodeIndexer instanceof NodeIndexer) {
+            foreach ($this->nodeIndexer->collectFulltextRoots($node) as $root) {
+                $roots[$this->operationKey($root)] = $root;
+            }
+            return;
+        }
         if (self::isFulltextRoot($node)) {
             $roots[$this->operationKey($node)] = $node;
         }

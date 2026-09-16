@@ -90,11 +90,23 @@ Medienreaktor:
 
 Please do not remove, only extend, above `filterableAttributes`, as they are needed for base functionality to work. After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`.
 
-Indexing a node at runtime replaces the documents of its own dimension combination and of every combination falling back to it, and nothing else. Documents whose combination no longer exists are therefore never touched again: after adding, removing or renaming a content dimension preset, changing a fallback chain, or running node migrations that move nodes or turn documents into content and back, empty the index and rebuild it:
+Normal property edits replace only the node's own dimension combination and the combinations falling back to it. Publishing content moved between fulltext roots also refreshes the previous root. Published changes to a document's fulltext-root role remove its previous document and refresh the affected roots. Hiding or showing an ancestor refreshes descendant fulltext roots without changing their own hidden flags. Extraction checks the entire live rootline, including hidden, removed and inaccessible ancestors. Document-move publishes refresh affected descendants whose paths changed internally; direct-live document moves refresh each changed variant and descendant through `nodePathChanged`.
+
+These listeners follow `Neos.ContentRepository.Search.realtimeIndexing.enabled`. After updating the package, run `./flow neos.flow:package:rescan` so Flow discovers its package bootstrap, and restart queue workers. Scheduled visibility still requires the separately enabled reconciliation command; its traversal includes fallback-only children in each affected target combination.
+
+The following changes do not emit sufficient runtime events and require an explicit full reindex:
+
+- NodeType search configuration changes, including `search.fulltext.isRoot`, extractors and required index attributes.
+- Content repository migrations and bulk NodeType conversions, including document/content restructurings.
+- Added, removed or renamed dimension presets, changed fallback chains or dimension names.
+- Direct database/NodeData writes and imports or CLI code bypassing the Node API and indexing services. Direct-live content moves between roots must explicitly refresh both roots.
+- One-time cleanup of stale documents created before installing these runtime fixes.
+
+Empty the index and rebuild it; a build alone cannot delete unreachable documents or old dimension IDs:
 
 ```bash
 flow nodeindex:flush
-flow nodeindex:build --assume-empty-index
+flow nodeindex:build --assume-empty-index --wait
 ```
 
 Document NodeTypes should be configured as fulltext root (this comes by default for all `Neos.Neos:Document` subtypes):

@@ -27,12 +27,27 @@ and above - are not part of the history below.
   combinations from the live workspace, which also lets a combination fall back to the
   next variant, and it rebuilds the document a removed content node belonged to.
 - A variant hidden only in a user workspace no longer removes the live document.
+- Publishing content moved between fulltext roots refreshes both the old and new
+  roots using immutable aggregate identifiers and target dimensions.
+- Published document-type changes that alter the fulltext-root role remove the
+  previous document and rebuild the affected roots.
+- Hidden ancestors exclude descendant documents from extraction. Hide/unhide
+  publishes refresh descendants without modifying their own hidden properties.
+- Direct-live document moves refresh changed variants and descendant documents
+  through `nodePathChanged`, deduplicated within a persistence batch.
+- Document-move publishes refresh descendant roots after persistence, when
+  their internally updated paths are queryable. Deleting a document also
+  repairs descendant root identifiers captured before physical deletion.
+- Scheduled reconciliation traverses each affected target combination, including
+  children authored only in a more-specific fallback locale.
+- Extraction uses the current time instead of a long-lived worker's start time
+  when evaluating scheduled visibility.
 
 ### Changed
 
-- `NodeIndexer::replaceVariants()` is public, so deferred indexers can replay a removal
-  after the node is gone. The reconciliation service no longer resolves fallback
-  combinations itself.
+- `NodeIndexer::replaceVariants()` is public, so deferred indexers can replay a repair
+  after the node is gone. Runtime structural repairs and scheduled reconciliation
+  use the same variant replacement and descendant traversal paths.
 
 ## [2.13.0] - 2026-09-19
 
