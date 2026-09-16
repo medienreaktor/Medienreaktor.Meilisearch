@@ -43,7 +43,7 @@ class RuntimeIndexingTest extends FunctionalTestCase
         $this->inject($this->indexer, 'indexClient', $this->index);
         $this->inject($this->indexer, 'neededAttributesForIndex', []);
         $links = new class extends NodeLinkService {
-            public function getNodeUri(NodeInterface $node, ?Context $context = null): ?string
+            public function getNodeUri(NodeInterface $node, ?Context $context = null): string
             {
                 return 'https://example.test' . $node->getPath();
             }
