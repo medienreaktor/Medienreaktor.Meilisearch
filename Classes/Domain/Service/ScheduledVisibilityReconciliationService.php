@@ -180,6 +180,9 @@ class ScheduledVisibilityReconciliationService
         }
     }
 
+    /**
+     * @param array<string, array{action: string, node: NodeInterface, combination: array}> $operations
+     */
     protected function collectOperationsInCombination(
         NodeData $nodeData,
         \DateTimeInterface $now,
@@ -201,6 +204,7 @@ class ScheduledVisibilityReconciliationService
             'inaccessibleContentShown' => false,
         ]));
 
+        /** @var NodeInterface|null $scheduledNode Context::getNode() can return null despite its upstream PHPDoc. */
         $scheduledNode = $maintenanceContext->getNode($nodeData->getPath());
         if (!$scheduledNode instanceof NodeInterface) {
             return;
@@ -215,6 +219,7 @@ class ScheduledVisibilityReconciliationService
 
         foreach ($affectedRoots as $key => $invisibleRoot) {
             if ($this->isNodeAndAncestorsVisible($invisibleRoot)) {
+                /** @var NodeInterface|null $visibleRoot */
                 $visibleRoot = $visibleContext->getNode($invisibleRoot->getPath());
                 if (!$visibleRoot instanceof NodeInterface || !self::isFulltextRoot($visibleRoot)) {
                     continue;

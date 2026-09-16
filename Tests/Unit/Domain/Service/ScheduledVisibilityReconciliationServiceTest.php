@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Tests\Unit\Domain\Service;
 
 use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
+use Medienreaktor\Meilisearch\Tests\Unit\Fixtures\ReconciliationNode;
+use Medienreaktor\Meilisearch\Tests\Unit\Fixtures\RecordingContextFactory;
 use Neos\ContentRepository\Domain\Model\Node;
 use Neos\ContentRepository\Domain\Model\NodeData;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Domain\Model\NodeType;
+use Neos\ContentRepository\Domain\Model\Workspace;
 use Neos\ContentRepository\Domain\Service\Context;
-use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
-use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 // phpcs:disable PSR1.Files.SideEffects -- The test fixture is not part of the package's production autoloader.
@@ -21,12 +21,12 @@ require_once __DIR__ . '/Fixtures/TestableScheduledVisibilityReconciliationServi
 class ScheduledVisibilityReconciliationServiceTest extends TestCase
 {
     /**
-     * @var ContextFactoryInterface&MockObject
+     * @var RecordingContextFactory
      */
     private $contextFactory;
 
     /**
-     * @var DimensionsService&MockObject
+     * @var DimensionsService
      */
     private $dimensionsService;
 
@@ -42,14 +42,27 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->contextFactory = $this->createMock(ContextFactoryInterface::class);
-        $this->dimensionsService = $this->createMock(DimensionsService::class);
-        $this->dimensionsService->method('getAllCombinations')->willReturn([['language' => ['de']]]);
-        $this->dimensionsService->method('combinationFallsBackTo')->willReturn(true);
-        $this->dimensionsService->method('hashByNode')->willReturnCallback(
-            fn(NodeInterface $node): string => $this->dimensionHashes[spl_object_id($node)]
-                ?? 'hash-' . $node->getIdentifier()
-        );
+        $this->contextFactory = new RecordingContextFactory();
+        $hashResolver = fn(NodeInterface $node): string => $this->dimensionHashes[spl_object_id($node)]
+            ?? 'hash-' . $node->getIdentifier();
+        $this->dimensionsService = new class ($hashResolver) extends DimensionsService {
+            private \Closure $hashResolver;
+
+            public function __construct(\Closure $hashResolver)
+            {
+                $this->hashResolver = $hashResolver;
+            }
+
+            public function getAllCombinations(): array
+            {
+                return [['language' => ['de']]];
+            }
+
+            public function hashByNode(NodeInterface $node): ?string
+            {
+                return ($this->hashResolver)($node);
+            }
+        };
 
         $this->service = new TestableScheduledVisibilityReconciliationService();
         $this->service->injectContextFactory($this->contextFactory);
@@ -67,9 +80,7 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
         $visibleContext = $this->createContext([
             '/sites/example/document' => $document,
         ]);
-        $this->contextFactory->expects(self::exactly(2))
-            ->method('create')
-            ->willReturnOnConsecutiveCalls($maintenanceContext, $visibleContext);
+        $this->contextFactory->contexts = [$maintenanceContext, $visibleContext];
 
         $operations = $this->service->collectOperations(
             $this->createNodeData('/sites/example/document/main/content'),
@@ -77,6 +88,7 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
         );
 
         self::assertCount(1, $operations);
+        self::assertCount(2, $this->contextFactory->configurations);
         self::assertSame('index', $operations['document:hash-document']['action']);
         self::assertSame($document, $operations['document:hash-document']['node']);
     }
@@ -112,9 +124,7 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
             '/sites/example/scheduled' => $scheduledDocument,
             '/sites/example/scheduled/child' => $childDocument,
         ]);
-        $this->contextFactory->expects(self::exactly(2))
-            ->method('create')
-            ->willReturnOnConsecutiveCalls($maintenanceContext, $visibleContext);
+        $this->contextFactory->contexts = [$maintenanceContext, $visibleContext];
 
         $operations = $this->service->collectOperations(
             $this->createNodeData('/sites/example/scheduled'),
@@ -122,6 +132,7 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
         );
 
         self::assertCount(2, $operations);
+        self::assertCount(2, $this->contextFactory->configurations);
         self::assertSame('index', $operations['scheduled-document:hash-scheduled-document']['action']);
         self::assertSame('index', $operations['child-document:hash-child-document']['action']);
     }
@@ -154,9 +165,7 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
             '/sites/example/scheduled' => $scheduledDocument,
         ]);
         $visibleContext = $this->createContext([]);
-        $this->contextFactory->expects(self::exactly(2))
-            ->method('create')
-            ->willReturnOnConsecutiveCalls($maintenanceContext, $visibleContext);
+        $this->contextFactory->contexts = [$maintenanceContext, $visibleContext];
 
         $operations = $this->service->collectOperations(
             $this->createNodeData('/sites/example/scheduled'),
@@ -164,6 +173,7 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
         );
 
         self::assertCount(2, $operations);
+        self::assertCount(2, $this->contextFactory->configurations);
         self::assertSame('remove', $operations['scheduled-document:hash-scheduled-document']['action']);
         self::assertSame('remove', $operations['child-document:hash-child-document']['action']);
     }
@@ -177,9 +187,7 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
             '/sites/example/document' => $hiddenDocument,
         ]);
         $visibleContext = $this->createContext([]);
-        $this->contextFactory->expects(self::exactly(2))
-            ->method('create')
-            ->willReturnOnConsecutiveCalls($maintenanceContext, $visibleContext);
+        $this->contextFactory->contexts = [$maintenanceContext, $visibleContext];
 
         $operations = $this->service->collectOperations(
             $this->createNodeData('/sites/example/document'),
@@ -187,13 +195,14 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
         );
 
         self::assertCount(1, $operations);
+        self::assertCount(2, $this->contextFactory->configurations);
         self::assertSame('remove', $operations['document:de-hash']['action']);
         self::assertSame($hiddenDocument, $operations['document:de-hash']['node']);
         self::assertSame(['language' => ['de']], $operations['document:de-hash']['combination']);
     }
 
     /**
-     * @return Node&MockObject
+     * @return ReconciliationNode
      * @param NodeInterface[] $children
      */
     private function createNode(
@@ -205,37 +214,12 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
         ?callable $parentCallback = null,
         array $children = []
     ): Node {
-        $node = $this->createMock(Node::class);
-        $node->method('getIdentifier')->willReturn($identifier);
-        $node->method('getPath')->willReturn($path);
-        $node->method('isRemoved')->willReturn(false);
-        $node->method('isVisible')->willReturn($visible);
-        $node->method('isAccessible')->willReturn(true);
-        $node->method('getChildNodes')->willReturn($children);
-
-        $nodeType = $this->createMock(NodeType::class);
-        $nodeType->method('getConfiguration')->with('search')->willReturn(
-            $fulltextRoot ? ['fulltext' => ['isRoot' => true]] : []
-        );
-        $node->method('getNodeType')->willReturn($nodeType);
-
-        if ($parentCallback !== null) {
-            $node->method('getParent')->willReturnCallback($parentCallback);
-        } elseif ($parent instanceof NodeInterface) {
-            $node->method('getParent')->willReturn($parent);
-        } else {
-            $node->method('getParent')->willReturn(null);
-        }
-
-        return $node;
+        return new ReconciliationNode($identifier, $path, $visible, $fulltextRoot, $parent, $parentCallback, $children);
     }
 
     private function createNodeData(string $path): NodeData
     {
-        $nodeData = $this->createMock(NodeData::class);
-        $nodeData->method('getPath')->willReturn($path);
-        $nodeData->method('getDimensionValues')->willReturn(['language' => ['de']]);
-        return $nodeData;
+        return new NodeData($path, new Workspace('live'), null, ['language' => ['de']]);
     }
 
     /**
@@ -243,10 +227,20 @@ class ScheduledVisibilityReconciliationServiceTest extends TestCase
      */
     private function createContext(array $nodesByPath): Context
     {
-        $context = $this->createMock(Context::class);
-        $context->method('getNode')->willReturnCallback(
-            static fn(string $path): ?NodeInterface => $nodesByPath[$path] ?? null
-        );
-        return $context;
+        return new class ($nodesByPath) extends Context {
+            /** @var array<string, NodeInterface> */
+            private array $nodesByPath;
+
+            /** @param array<string, NodeInterface> $nodesByPath */
+            public function __construct(array $nodesByPath)
+            {
+                $this->nodesByPath = $nodesByPath;
+            }
+
+            public function getNode($path): ?NodeInterface
+            {
+                return $this->nodesByPath[$path] ?? null;
+            }
+        };
     }
 }

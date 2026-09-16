@@ -14,6 +14,7 @@ use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Model\Workspace;
 use Neos\ContentRepository\Domain\Repository\WorkspaceRepository;
 use Neos\ContentRepository\Domain\Service\ContentDimensionCombinator;
+use Neos\ContentRepository\Domain\Service\Context;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use Neos\ContentRepository\Domain\Service\NodeTypeManager;
 use Neos\Flow\Tests\FunctionalTestCase;
@@ -41,13 +42,19 @@ class RuntimeIndexingTest extends FunctionalTestCase
         $this->index = new RecordingIndex();
         $this->inject($this->indexer, 'indexClient', $this->index);
         $this->inject($this->indexer, 'neededAttributesForIndex', []);
-        $links = $this->createMock(NodeLinkService::class);
-        $links->method('getNodeUri')->willReturnCallback(static fn(NodeInterface $node): string => 'https://example.test' . $node->getPath());
+        $links = new class extends NodeLinkService {
+            public function getNodeUri(NodeInterface $node, ?Context $context = null): ?string
+            {
+                return 'https://example.test' . $node->getPath();
+            }
+        };
         $this->inject($this->indexer, 'nodeLinkService', $links);
-        $combinator = $this->createMock(ContentDimensionCombinator::class);
-        $combinator->method('getAllAllowedCombinations')->willReturn([
-            ['language' => ['en']], ['language' => ['en_AU', 'en']], ['language' => ['de']],
-        ]);
+        $combinator = new class extends ContentDimensionCombinator {
+            public function getAllAllowedCombinations(): array
+            {
+                return [['language' => ['en']], ['language' => ['en_AU', 'en']], ['language' => ['de']]];
+            }
+        };
         $dimensions = $this->objectManager->get(DimensionsService::class);
         $this->inject($dimensions, 'contentDimensionCombinator', $combinator);
         $this->inject($dimensions, 'dimensionCombinationsForIndexing', []);
