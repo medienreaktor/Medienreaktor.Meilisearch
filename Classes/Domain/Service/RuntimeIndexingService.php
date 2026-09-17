@@ -30,7 +30,7 @@ class RuntimeIndexingService
     protected $dimensionsService;
 
     /**
-     * @Flow\Inject
+     * @Flow\Inject(lazy=false)
      * @var NodeIndexerInterface
      */
     protected $nodeIndexer;

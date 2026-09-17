@@ -33,6 +33,9 @@ and above - are not part of the history below.
   previous document and rebuild the affected roots.
 - Hidden ancestors exclude descendant documents from extraction. Hide/unhide
   publishes refresh descendants without modifying their own hidden properties.
+- Runtime repairs eagerly inject the configured indexer, preventing Flow's lazy
+  dependency proxy from failing the concrete type guard on the first publish.
+  Interface-based selection of the queueing decorator is preserved.
 - Direct-live document moves refresh changed variants and descendant documents
   through `nodePathChanged`, deduplicated within a persistence batch.
 - Document-move publishes refresh descendant roots after persistence, when

@@ -17,6 +17,7 @@ use Neos\ContentRepository\Domain\Service\ContentDimensionCombinator;
 use Neos\ContentRepository\Domain\Service\Context;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use Neos\ContentRepository\Domain\Service\NodeTypeManager;
+use Neos\ContentRepository\Search\Indexer\NodeIndexerInterface;
 use Neos\Flow\Tests\FunctionalTestCase;
 
 class RuntimeIndexingTest extends FunctionalTestCase
@@ -35,6 +36,12 @@ class RuntimeIndexingTest extends FunctionalTestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Resolve repairs before the indexer: preinitializing it masks lazy injection failures.
+        $this->repairs = $this->objectManager->get(RuntimeIndexingService::class);
+        $indexerProperty = new \ReflectionProperty(RuntimeIndexingService::class, 'nodeIndexer');
+        $indexerProperty->setAccessible(true);
+        self::assertInstanceOf(NodeIndexer::class, $indexerProperty->getValue($this->repairs));
+        self::assertSame($this->objectManager->get(NodeIndexerInterface::class), $indexerProperty->getValue($this->repairs));
         $this->objectManager->get(\Neos\Flow\Security\Authorization\TestingPrivilegeManager::class)->setOverrideDecision(true);
         $this->contexts = $this->objectManager->get(ContextFactoryInterface::class);
         $this->types = $this->objectManager->get(NodeTypeManager::class);
@@ -58,7 +65,6 @@ class RuntimeIndexingTest extends FunctionalTestCase
         $dimensions = $this->objectManager->get(DimensionsService::class);
         $this->inject($dimensions, 'contentDimensionCombinator', $combinator);
         $this->inject($dimensions, 'dimensionCombinationsForIndexing', []);
-        $this->repairs = $this->objectManager->get(RuntimeIndexingService::class);
         $this->inject($this->repairs, 'publishingStates', []);
         $this->inject($this->repairs, 'operations', []);
         $this->inject($this->repairs, 'subtrees', []);
@@ -132,6 +138,33 @@ class RuntimeIndexingTest extends FunctionalTestCase
         self::assertArrayHasKey($grandchild->getIdentifier(), $this->documentsWritten());
         self::assertArrayNotHasKey($independentlyHidden->getIdentifier(), $this->documentsWritten());
         self::assertTrue($independentlyHidden->isHidden());
+    }
+
+    public function testPublishingMultipleHiddenDocumentsRepairsBothSubtrees(): void
+    {
+        $documents = [$this->document('first'), $this->document('second')];
+        $children = [];
+        foreach ($documents as $document) {
+            $children[] = $document->createNode('child', $this->types->getNodeType('Medienreaktor.Meilisearch.Testing:Document'));
+        }
+        $this->persistChanges();
+        $this->index->calls = [];
+        $draft = $this->context('user-test');
+        $hiddenDocuments = [];
+        foreach ($documents as $document) {
+            $hiddenDocument = $draft->getNodeByIdentifier($document->getIdentifier());
+            $hiddenDocument->setHidden(true);
+            $hiddenDocuments[] = $hiddenDocument;
+        }
+        $this->draft->publishNodes($hiddenDocuments, $this->live);
+        $this->persistChanges();
+        foreach (array_merge($documents, $children) as $document) {
+            self::assertCount(2, array_unique($this->deletedDocumentsFor($document->getIdentifier())));
+            self::assertSame([], $this->variantsWritten($document->getIdentifier()));
+        }
+        foreach ($children as $child) {
+            self::assertFalse($child->isHidden());
+        }
     }
 
     public function testDocumentDemotionDeletesItsPreviousDocument(): void
