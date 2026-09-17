@@ -360,6 +360,7 @@ class RuntimeIndexingTest extends FunctionalTestCase
 
     protected function tearDown(): void
     {
+        $this->inject($this->repairs, 'nodeIndexer', $this->objectManager->get(NodeIndexerInterface::class));
         $this->inject($this->contexts, 'contextInstances', []);
         parent::tearDown();
     }
