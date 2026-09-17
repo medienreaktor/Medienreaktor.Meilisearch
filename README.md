@@ -268,6 +268,22 @@ Medienreaktor:
 
 `tenantToken.expiresIn: 0` is the default and creates a token without an expiry claim. This is useful when the token is rendered through cached Fusion output. Set a positive value in seconds only if your rendered frontend configuration is not cached beyond that token lifetime.
 
+The last term of that filter is optional:
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    frontendFilter:
+      excludeHiddenInIndex: true
+```
+
+`true` is the default and keeps the current behaviour. `_hiddenInIndex` is the Neos
+"Hide in menus" flag, which is about navigation rather than findability, so a site that
+wants those pages to stay searchable sets this to `false` and the term is left out of the
+filter. Note that the filter lives in the tenant token and is therefore enforced by
+Meilisearch: a client cannot widen it, so removing the term from your own frontend code
+has no effect while this setting is `true`.
+
 You can pass additional Meilisearch filter expressions as the fifth argument:
 
 ```fusion

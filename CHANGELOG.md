@@ -14,6 +14,17 @@ and above - are not part of the history below.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pages hidden in menus can be kept searchable.** The frontend filter always excluded
+  documents with `_hiddenInIndex = true`, which is the Neos "Hide in menus" flag - a
+  navigation setting that does not have to mean a page should be unfindable. Because the
+  filter is carried in the tenant token, Meilisearch enforces it and a client cannot widen
+  it: a site that dropped the term from its own frontend code kept getting the filtered
+  result, with nothing to show that the change had no effect. The new
+  `frontendFilter.excludeHiddenInIndex` setting leaves the term out when set to `false`.
+  It defaults to `true`, so nothing changes for a site that does not set it.
+
 ## [2.13.0] - 2026-09-19
 
 ### Fixed

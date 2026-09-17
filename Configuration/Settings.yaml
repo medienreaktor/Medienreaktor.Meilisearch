@@ -36,6 +36,13 @@ Medienreaktor:
       readonlyApiKeyUid: ''
     tenantToken:
       expiresIn: 0
+    frontendFilter:
+      # Whether the frontend filter excludes documents whose node is hidden in the
+      # index. It is the Neos "Hide in menus" flag, which is about navigation and
+      # need not mean the page should be unfindable - a site that wants those pages
+      # searchable turns this off. The filter goes into the tenant token, so it is
+      # enforced by Meilisearch and a client cannot widen it.
+      excludeHiddenInIndex: true
     settings:
       displayedAttributes:
         - '*'

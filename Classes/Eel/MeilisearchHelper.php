@@ -34,6 +34,12 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
     protected $tenantTokenSettings = [];
 
     /**
+     * @Flow\InjectConfiguration(path="frontendFilter", package="Medienreaktor.Meilisearch")
+     * @var array
+     */
+    protected $frontendFilterSettings = [];
+
+    /**
      * Generate a Meilisearch tenant token for frontend searches in the current site and dimension context.
      *
      * @param NodeInterface $siteNode
@@ -116,8 +122,11 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
             '(__parentPath = "' . $this->escapeFilterValue($siteNodePath) . '" OR __path = "' . $this->escapeFilterValue($siteNodePath) . '")',
             '__dimensionsHash = "' . $this->escapeFilterValue($dimensionsHash) . '"',
             '_hidden = false',
-            '_hiddenInIndex = false',
         ];
+
+        if ($this->excludesHiddenInIndex()) {
+            $filters[] = '_hiddenInIndex = false';
+        }
 
         return implode(' AND ', array_merge($filters, array_filter($additionalFilters)));
     }
@@ -139,6 +148,16 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
     private function getTenantTokenApiKeyUid(): string
     {
         return (string)($this->tenantTokenSettings['apiKeyUid'] ?? $this->clientSettings['readonlyApiKeyUid'] ?? '');
+    }
+
+    /**
+     * Whether the frontend filter hides documents whose node is hidden in the index.
+     * Absent configuration keeps them hidden, which is what every existing site
+     * already gets.
+     */
+    private function excludesHiddenInIndex(): bool
+    {
+        return (bool)($this->frontendFilterSettings['excludeHiddenInIndex'] ?? true);
     }
 
     private function getTenantTokenExpiresIn(): int
