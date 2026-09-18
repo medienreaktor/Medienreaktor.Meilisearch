@@ -89,4 +89,26 @@ class MeilisearchHelperTest extends TestCase
             $filter
         );
     }
+
+    /**
+     * A site-defined rule is the mechanism for keeping pages out of the search by a
+     * property of their own; it sits between the fixed terms and the per-call ones.
+     */
+    public function testAppendsConfiguredRulesAfterTheHiddenTerms(): void
+    {
+        $filter = $this->filter([
+            'excludeRules' => ['hiddenFromSearch' => ['attribute' => 'hiddenFromSearch', 'value' => true]],
+        ]);
+
+        self::assertStringEndsWith('AND _hidden = false AND _hiddenInIndex = false AND NOT hiddenFromSearch = true', $filter);
+    }
+
+    public function testKeepsPerCallFiltersLast(): void
+    {
+        $filter = $this->helper([
+            'excludeRules' => ['hiddenFromSearch' => ['attribute' => 'hiddenFromSearch', 'value' => true]],
+        ])->frontendFilter($this->siteNode(), ['language' => ['en']], ['__nodeType = "Neos.Neos:Document"']);
+
+        self::assertStringEndsWith('AND NOT hiddenFromSearch = true AND __nodeType = "Neos.Neos:Document"', $filter);
+    }
 }

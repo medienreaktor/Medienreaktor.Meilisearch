@@ -152,6 +152,26 @@ Medienreaktor:
       - 'title'
 ```
 
+The same setting keeps documents out of the index entirely - for every consumer, not only
+the frontend search. Give your node types an attribute computed by an Eel expression and
+list it. Name it positively: `false`, `0` and empty values count as missing, so the
+document is removed exactly when the expression is falsy.
+
+```yaml
+'Neos.Neos:Document':
+  properties:
+    'searchIndexable':
+      search:
+        indexing: "${!q(node).property('hiddenFromSearch')}"
+```
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    neededAttributesForIndex:
+      - 'searchIndexable'
+```
+
 ## 📖 Usage with Neos and Fusion
 
 There is a built-in Content NodeType `Medienreaktor.Meilisearch:Search` for rendering the search form, results and pagination that may serve as a boilerplate for your projects. Just place it on your search page to start.
@@ -233,6 +253,16 @@ nodePath = ${site.path}
 dimensionsHash = ${Dimensions.hash(site.context.dimensions)}
 ```
 
+That string covers only the context node and dimensions. To apply the same visibility
+terms and exclude rules as a tenant token, render the helper's filter instead:
+
+```
+filter = ${Meilisearch.frontendFilter(site, site.context.dimensions)}
+```
+
+A filter the browser sends can still be left out by anyone querying with the same key, so
+prefer a tenant token where the filter must hold.
+
 ### 2. Frontend tenant tokens
 
 For browser-based search, prefer a Meilisearch tenant token over exposing a plain search key. The `Meilisearch` Eel helper is available in Fusion and can generate a token scoped to the current site node, content dimensions and visibility flags:
@@ -247,7 +277,7 @@ searchConfig = Neos.Fusion:DataStructure {
 
 The third argument is the Meilisearch index name. The package default index name is `neos`; pass your project-specific index name if you use a different one.
 
-The generated token enforces this filter:
+The generated token enforces this filter, followed by one term per exclude rule (see below):
 
 ```text
 (__parentPath = "$siteNodePath" OR __path = "$siteNodePath") AND __dimensionsHash = "$dimensionsHash" AND _hidden = false AND _hiddenInIndex = false
@@ -283,6 +313,47 @@ wants those pages to stay searchable sets this to `false` and the term is left o
 filter. Note that the filter lives in the tenant token and is therefore enforced by
 Meilisearch: a client cannot widen it, so removing the term from your own frontend code
 has no effect while this setting is `true`.
+
+To keep further documents out of the frontend search, add exclude rules, keyed by a name of
+your choice:
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    frontendFilter:
+      excludeRules:
+        hiddenFromSearch:
+          attribute: 'hiddenFromSearch'
+          value: true
+        meetingPages:
+          attribute: '__nodeTypeAndSupertypes'
+          value: 'Vendor.Site:Document.MeetingPage'
+```
+
+Each rule adds `NOT <attribute> = <value>` to the filter. It excludes documents whose
+attribute equals the value - for a list attribute such as `__nodeTypeAndSupertypes`,
+documents whose list contains it - and keeps all others, including documents that do not
+have the attribute at all. A property you introduce is therefore safe to roll out:
+documents indexed before it existed stay searchable until they are reindexed. Rules merge
+like any Flow setting, so a site switches off a rule another package defines by setting it
+to `~`.
+
+Every attribute the filter names is made filterable when the index is created, in addition
+to your configured `filterableAttributes`. Do not add rule attributes to that list
+yourself: Flow merges lists by position, so appending to a list another package also
+defines replaces its entries instead of adding to them.
+
+Meilisearch rejects a search whose filter names an attribute it cannot filter by yet. When
+you add a rule, apply the index settings before pages render tokens that contain it:
+
+```bash
+./flow nodeindex:createindex --wait
+```
+
+Tokens rendered into cached output keep the filter they were issued with, and with
+`expiresIn: 0` they do not expire. A rule change therefore reaches newly rendered pages;
+to make it binding for pages rendered earlier, rotate the search key the tokens are signed
+with and flush the page cache.
 
 You can pass additional Meilisearch filter expressions as the fifth argument:
 

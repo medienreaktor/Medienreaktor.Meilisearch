@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Eel;
 
 use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
+use Medienreaktor\Meilisearch\Domain\Service\FrontendFilterRules;
 use Meilisearch\Client;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\Eel\ProtectedContextAwareInterface;
@@ -124,11 +125,11 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
             '_hidden = false',
         ];
 
-        if ($this->excludesHiddenInIndex()) {
-            $filters[] = '_hiddenInIndex = false';
-        }
-
-        return implode(' AND ', array_merge($filters, array_filter($additionalFilters)));
+        return implode(' AND ', array_merge(
+            $filters,
+            (new FrontendFilterRules($this->frontendFilterSettings))->terms(),
+            array_filter($additionalFilters)
+        ));
     }
 
     /**
@@ -148,16 +149,6 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
     private function getTenantTokenApiKeyUid(): string
     {
         return (string)($this->tenantTokenSettings['apiKeyUid'] ?? $this->clientSettings['readonlyApiKeyUid'] ?? '');
-    }
-
-    /**
-     * Whether the frontend filter hides documents whose node is hidden in the index.
-     * Absent configuration keeps them hidden, which is what every existing site
-     * already gets.
-     */
-    private function excludesHiddenInIndex(): bool
-    {
-        return (bool)($this->frontendFilterSettings['excludeHiddenInIndex'] ?? true);
     }
 
     private function getTenantTokenExpiresIn(): int

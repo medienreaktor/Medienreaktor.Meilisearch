@@ -43,6 +43,14 @@ Medienreaktor:
       # searchable turns this off. The filter goes into the tenant token, so it is
       # enforced by Meilisearch and a client cannot widen it.
       excludeHiddenInIndex: true
+      # Further documents to keep out of the frontend search, keyed by a name of your
+      # choice. Each rule excludes documents whose `attribute` equals `value` and keeps
+      # all others, including documents without the attribute. Set a rule to `~` to
+      # switch it off. Rule attributes are made filterable when the index is created.
+      #   hiddenFromSearch:
+      #     attribute: 'hiddenFromSearch'
+      #     value: true
+      excludeRules: {}
     settings:
       displayedAttributes:
         - '*'
