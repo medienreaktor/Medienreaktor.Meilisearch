@@ -14,6 +14,26 @@ and above - are not part of the history below.
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-09-19
+
+### Fixed
+
+- **Indexing driven by persisted requests no longer writes per node either.**
+  `Neos.ContentRepository.Search` drains its indexing queue and asks the indexer to
+  flush on every `persistAll()`, so the buffer introduced in 2.11.0 only ever helped
+  `nodeindex:build`: an import that persists after every node - as
+  `medienreaktor/xmediaimport` does, to keep its own memory flat - flushed after every
+  node and enqueued two single-document tasks per node all the same. On a
+  9,700-document site that queued about 9,000 tasks an hour against a server that
+  drained 6,000, and Meilisearch grew into the memory of its host until the kernel
+  killed it - roughly every two and a half hours, with the site unreachable while the
+  host paged. `NodeIndexer` now implements `BulkNodeIndexerInterface`: inside
+  `withBulkProcessing()`, which is how the search package wraps each draining of its
+  queue, `flush()` writes only a full buffer, and the buffer carries over from one
+  persisted request to the next. What the last buffer of a run holds is written when
+  Flow shuts the indexer down, after its own final `persistAll()`. Called directly, as
+  `nodeindex:build` does, `flush()` still writes everything.
+
 ## [2.12.0] - 2026-09-11
 
 ### Fixed
