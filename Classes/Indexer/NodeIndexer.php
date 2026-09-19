@@ -15,14 +15,17 @@ use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraints;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use Neos\ContentRepository\Exception\NodeException;
 use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
+use Neos\ContentRepository\Search\Indexer\BulkNodeIndexerInterface;
 use Neos\Flow\Annotations as Flow;
 
 /**
  * Indexer for Content Repository Nodes.
  *
+ * Writes are buffered and go out in batches; flush() says when.
+ *
  * @Flow\Scope("singleton")
  */
-class NodeIndexer extends AbstractNodeIndexer
+class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterface
 {
     /**
      * Bounds how many documents may sit in the buffer before it is written out, so the
@@ -109,6 +112,15 @@ class NodeIndexer extends AbstractNodeIndexer
      * @var bool
      */
     protected $assumeEmptyIndex = false;
+
+    /**
+     * How many withBulkProcessing() calls are open. While any is, flush() writes only a
+     * full buffer. A depth rather than a flag, so that a nested call cannot end the
+     * outer one early.
+     *
+     * @var int
+     */
+    protected $bulkProcessingDepth = 0;
 
     public function initializeObject($cause)
     {
@@ -285,12 +297,21 @@ class NodeIndexer extends AbstractNodeIndexer
     }
 
     /**
-     * Write everything buffered so far.
+     * Write everything buffered so far - or, while withBulkProcessing() is open, only a
+     * full buffer.
      *
      * Meilisearch queues one task per write request, and a queue that grows faster than
-     * the server drains it is what makes a rebuild expensive: writing per node turns
+     * the server drains it is what makes indexing expensive: writing per node turns
      * every node into two tasks. Buffering collapses a whole batch into one deletion
      * and one addition regardless of how many nodes it covers.
+     *
+     * Neos.ContentRepository.Search asks for a flush on every persisted request, from
+     * inside withBulkProcessing(). An import that persists after every node would so
+     * flush after every node, and a flush that always wrote would be back to two tasks
+     * per node - so during bulk processing a flush writes nothing until the buffer is
+     * full, and what the last buffer of a run holds goes out in shutdownObject().
+     * Outside bulk processing - nodeindex:build calls flush() directly - it writes
+     * everything.
      *
      * The three groups go out in a fixed order - stale variants by aggregate, then
      * documents by id, then additions - which is why buffering coalesces per document
@@ -300,6 +321,53 @@ class NodeIndexer extends AbstractNodeIndexer
      * @return void
      */
     public function flush(): void
+    {
+        if ($this->bulkProcessingDepth > 0) {
+            $this->flushIfBufferIsFull();
+            return;
+        }
+
+        $this->writeBuffer();
+    }
+
+    /**
+     * Run the callback with flushes deferred to full buffers.
+     *
+     * Neos.ContentRepository.Search wraps each draining of its indexing queue in this,
+     * once per persisted request. Nothing is written when the callback returns: the
+     * buffer carries over to the next call, which is what lets an import that persists
+     * per node write per batch.
+     *
+     * @param callable $callback
+     * @return void
+     */
+    public function withBulkProcessing(callable $callback): void
+    {
+        $this->bulkProcessingDepth++;
+        try {
+            $callback();
+        } finally {
+            $this->bulkProcessingDepth--;
+        }
+    }
+
+    /**
+     * Flow calls this as the request or command ends, after its own final persistAll()
+     * has queued the last changed nodes for indexing - so this is where a run whose
+     * flushes were deferred writes what its last buffer holds. A run killed before it
+     * gets here loses that buffer, as it loses everything else it had not written yet.
+     *
+     * @return void
+     */
+    public function shutdownObject(): void
+    {
+        $this->flush();
+    }
+
+    /**
+     * @return void
+     */
+    protected function writeBuffer(): void
     {
         $identifierDeletions = array_keys($this->bufferedIdentifierDeletions);
         $documentDeletions = array_keys($this->bufferedDocumentDeletions);
@@ -381,8 +449,8 @@ class NodeIndexer extends AbstractNodeIndexer
     }
 
     /**
-     * Flushes once the buffer has reached its size, and only ever between nodes: a node
-     * whose deletions and additions were split across two flushes would leave the index
+     * Writes once the buffer has reached its size, and only ever between nodes: a node
+     * whose deletions and additions were split across two writes would leave the index
      * without it in between.
      *
      * @return void
@@ -394,7 +462,7 @@ class NodeIndexer extends AbstractNodeIndexer
             + count($this->bufferedIdentifierDeletions);
 
         if ($buffered >= $this->batchSize()) {
-            $this->flush();
+            $this->writeBuffer();
         }
     }
 
