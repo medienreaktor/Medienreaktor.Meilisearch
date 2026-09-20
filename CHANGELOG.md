@@ -14,6 +14,39 @@ and above - are not part of the history below.
 
 ## [Unreleased]
 
+### Added
+
+- **`frontendFilter.excludeRules` keeps further documents out of the frontend search.**
+  Keyed rules of `attribute` and `value`, each adding `NOT <attribute> = <value>` to the
+  filter the tenant token enforces - for a site's own boolean property, or for a node type
+  through `__nodeTypeAndSupertypes`. Documents without the attribute stay searchable, so a
+  newly introduced property does not empty the search before the index is rebuilt.
+  `excludeHiddenInIndex` is unchanged, and a filter without rules is exactly what it was.
+- `nodeindex:createindex --wait` and `--timeout`, so a deployment can make sure Meilisearch
+  has applied new filterable attributes before pages render tokens that filter by them.
+
+### Changed
+
+- `createIndex()` adds every attribute the frontend filter names to the configured
+  `filterableAttributes`, after the configured entries. Meilisearch rejects a whole search
+  whose filter names an attribute it cannot filter by, and Flow merges lists position by
+  position, which makes a site's own list an unreliable place to add them. Granular
+  filterable-attribute objects are left as configured.
+- `createIndex()` registers its settings update for waiting, so `nodeindex:build --wait`
+  and `nodeindex:createindex --wait` fail when Meilisearch rejects the index settings
+  instead of reporting success.
+
+### Fixed
+
+- **Pages hidden in menus can be kept searchable.** The frontend filter always excluded
+  documents with `_hiddenInIndex = true`, which is the Neos "Hide in menus" flag - a
+  navigation setting that does not have to mean a page should be unfindable. Because the
+  filter is carried in the tenant token, Meilisearch enforces it and a client cannot widen
+  it: a site that dropped the term from its own frontend code kept getting the filtered
+  result, with nothing to show that the change had no effect. The new
+  `frontendFilter.excludeHiddenInIndex` setting leaves the term out when set to `false`.
+  It defaults to `true`, so nothing changes for a site that does not set it.
+
 ## [2.13.0] - 2026-09-19
 
 ### Fixed

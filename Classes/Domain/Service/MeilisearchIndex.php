@@ -70,6 +70,12 @@ class MeilisearchIndex implements IndexInterface
     protected $indexingSettings = [];
 
     /**
+     * @Flow\InjectConfiguration(path="frontendFilter", package="Medienreaktor.Meilisearch")
+     * @var array
+     */
+    protected $frontendFilterSettings = [];
+
+    /**
      * Uids of the tasks this instance enqueued and has not yet waited for.
      *
      * @var array<int, int>
@@ -92,15 +98,43 @@ class MeilisearchIndex implements IndexInterface
     }
 
     /**
-     * Neither task is registered for waiting on. Creating an index that already exists
-     * is how callers ask for one idempotently, and Meilisearch answers that with a
-     * failed `indexCreation` task - so tracking it would make every wait on an existing
-     * index report a failure.
+     * Only the settings update is registered for waiting on. Creating an index that
+     * already exists is how callers ask for one idempotently, and Meilisearch answers
+     * that with a failed `indexCreation` task - so tracking it would make every wait on
+     * an existing index report a failure.
      */
     public function createIndex(): void
     {
         $this->client->createIndex($this->indexName);
-        $this->index->updateSettings($this->indexSettings);
+        $this->rememberTask($this->index->updateSettings($this->indexSettingsWithFrontendFilterAttributes()));
+    }
+
+    /**
+     * The configured settings, plus whatever attribute the frontend filter names that
+     * the configured filterable attributes lack. Meilisearch rejects a whole search whose
+     * filter names an attribute it cannot filter by, and a tenant token carries that
+     * filter into every frontend search.
+     *
+     * Added here rather than listed in Settings.yaml because Flow merges lists by
+     * position, so a site's own list overwrites the package's entries instead of adding
+     * to them. Entries that are not plain names - Meilisearch's granular filterable
+     * attribute objects - are left as configured.
+     *
+     * @return array
+     */
+    protected function indexSettingsWithFrontendFilterAttributes(): array
+    {
+        $settings = (array)$this->indexSettings;
+        $filterableAttributes = array_values((array)($settings['filterableAttributes'] ?? []));
+
+        foreach ((new FrontendFilterRules($this->frontendFilterSettings))->attributes() as $attribute) {
+            if (!in_array($attribute, $filterableAttributes, true)) {
+                $filterableAttributes[] = $attribute;
+            }
+        }
+        $settings['filterableAttributes'] = $filterableAttributes;
+
+        return $settings;
     }
 
     /**

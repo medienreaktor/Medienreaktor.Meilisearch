@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Eel;
 
 use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
+use Medienreaktor\Meilisearch\Domain\Service\FrontendFilterRules;
 use Meilisearch\Client;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\Eel\ProtectedContextAwareInterface;
@@ -32,6 +33,12 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
      * @var array
      */
     protected $tenantTokenSettings = [];
+
+    /**
+     * @Flow\InjectConfiguration(path="frontendFilter", package="Medienreaktor.Meilisearch")
+     * @var array
+     */
+    protected $frontendFilterSettings = [];
 
     /**
      * Generate a Meilisearch tenant token for frontend searches in the current site and dimension context.
@@ -116,10 +123,13 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
             '(__parentPath = "' . $this->escapeFilterValue($siteNodePath) . '" OR __path = "' . $this->escapeFilterValue($siteNodePath) . '")',
             '__dimensionsHash = "' . $this->escapeFilterValue($dimensionsHash) . '"',
             '_hidden = false',
-            '_hiddenInIndex = false',
         ];
 
-        return implode(' AND ', array_merge($filters, array_filter($additionalFilters)));
+        return implode(' AND ', array_merge(
+            $filters,
+            (new FrontendFilterRules($this->frontendFilterSettings))->terms(),
+            array_filter($additionalFilters)
+        ));
     }
 
     /**
