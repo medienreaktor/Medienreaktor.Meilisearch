@@ -90,6 +90,13 @@ Medienreaktor:
 
 Please do not remove, only extend, above `filterableAttributes`, as they are needed for base functionality to work. After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`.
 
+Indexing a node at runtime replaces the documents of its own dimension combination and of every combination falling back to it, and nothing else. Documents whose combination no longer exists are therefore never touched again: after adding, removing or renaming a content dimension preset, changing a fallback chain, or running node migrations that move nodes or turn documents into content and back, empty the index and rebuild it:
+
+```bash
+flow nodeindex:flush
+flow nodeindex:build --assume-empty-index
+```
+
 Document NodeTypes should be configured as fulltext root (this comes by default for all `Neos.Neos:Document` subtypes):
 
 ```yaml
