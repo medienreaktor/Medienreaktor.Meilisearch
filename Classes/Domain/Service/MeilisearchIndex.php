@@ -26,6 +26,14 @@ class MeilisearchIndex implements IndexInterface
     private const DEFAULT_BATCH_SIZE = 1000;
 
     /**
+     * The document field Meilisearch identifies documents by. It has to be named
+     * explicitly: left to infer one, Meilisearch scans the first batch for fields
+     * ending in `id` and rejects the whole batch when a node property such as
+     * `linkedInConversionId` gives it a second candidate.
+     */
+    private const PRIMARY_KEY = 'id';
+
+    /**
      * How often the wait loop asks whether the index still has work queued.
      */
     private const WAIT_POLL_INTERVAL_IN_MS = 500;
@@ -99,7 +107,7 @@ class MeilisearchIndex implements IndexInterface
      */
     public function createIndex(): void
     {
-        $this->client->createIndex($this->indexName);
+        $this->client->createIndex($this->indexName, ['primaryKey' => self::PRIMARY_KEY]);
         $this->index->updateSettings($this->indexSettings);
     }
 
@@ -113,7 +121,7 @@ class MeilisearchIndex implements IndexInterface
             return;
         }
 
-        foreach ($this->index->addDocumentsInBatches($documents, $this->batchSize()) as $task) {
+        foreach ($this->index->addDocumentsInBatches($documents, $this->batchSize(), self::PRIMARY_KEY) as $task) {
             $this->rememberTask($task);
         }
     }

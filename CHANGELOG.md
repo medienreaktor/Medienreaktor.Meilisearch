@@ -14,6 +14,23 @@ and above - are not part of the history below.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The index is now told its primary key instead of leaving Meilisearch to infer one.**
+  Neither `createIndex()` nor the document writes named `id`, so Meilisearch fell back to
+  inferring the key from the first batch it was handed: it looks for a field whose name
+  ends in `id`, and refuses when it finds more than one. Node properties are written to
+  the document as top-level fields, so any site with a property such as
+  `linkedInConversionId` or `googleTagManagerId` on a node type supplies that second
+  candidate, and every `documentAdditionOrUpdate` task is rejected with
+  `index_primary_key_multiple_candidates_found` - the whole batch, not the offending
+  document. A site could rebuild 2,180 nodes into an index that stayed empty, because
+  `nodeindex:build` only waits on its tasks when asked to with `--wait`. Existing indexes
+  are unaffected: a primary key is inferred once, at the first successful write, and held
+  from then on, so this was only ever reachable on an index created from scratch. Naming
+  the key on the writes as well as at creation also repairs an index that was created
+  without one, which a `PATCH` cannot do once it holds documents.
+
 ## [2.13.0] - 2026-09-19
 
 ### Fixed

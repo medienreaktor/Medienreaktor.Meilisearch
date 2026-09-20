@@ -285,4 +285,47 @@ class MeilisearchIndexTest extends TestCase
 
         $index->waitForPendingTasks(30);
     }
+
+    /**
+     * Meilisearch only infers a primary key when it is not told one, and infers it from
+     * the first batch of documents it is handed. A node property whose name ends in
+     * `id` - `linkedInConversionId`, `googleTagManagerId` - is a second candidate next
+     * to the document's own `id`, and Meilisearch answers an ambiguous inference by
+     * rejecting the entire batch. Naming the key takes the site's node types out of the
+     * question, so these assert that it leaves with the request.
+     */
+    public function testCreateIndexNamesThePrimaryKeyRatherThanLeavingItToInference(): void
+    {
+        $index = $this->index('test');
+        $reflection = new \ReflectionObject($index);
+        $property = $reflection->getProperty('indexSettings');
+        $property->setAccessible(true);
+        $property->setValue($index, []);
+
+        $index->createIndex();
+
+        self::assertSame('/indexes', $this->transport->paths()[0]);
+        self::assertSame(
+            ['primaryKey' => 'id', 'uid' => 'test'],
+            $this->decodedBody(0)
+        );
+    }
+
+    /**
+     * An index created before this was fixed carries no primary key at all, and one
+     * cannot be set on it once it holds documents. Naming the key on the write itself
+     * is what repairs those, so every batch has to carry it - not just the first.
+     */
+    public function testAddDocumentsNamesThePrimaryKeyOnEveryBatch(): void
+    {
+        $this->index('test', 10)->addDocuments($this->documents(25));
+
+        self::assertCount(3, $this->transport->requests);
+        foreach ([0, 1, 2] as $position) {
+            self::assertSame(
+                'primaryKey=id',
+                $this->transport->requests[$position]->getUri()->getQuery()
+            );
+        }
+    }
 }
