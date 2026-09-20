@@ -193,6 +193,19 @@ class NodeIndexerBufferingTest extends TestCase
         self::assertSame(['deleteByIdentifiers', 'addDocuments'], $this->index->calledMethods());
     }
 
+    /**
+     * Deferred indexers persist the document identifier while the node still exists,
+     * so the removal must not need the node once it runs.
+     */
+    public function testRemovesDocumentByItsImmutableIdentifier(): void
+    {
+        $this->nodeIndexer->removeDocumentByIdentifier('document-aggregate_language-de-hash');
+        $this->nodeIndexer->flush();
+
+        self::assertSame(['deleteDocuments'], $this->index->calledMethods());
+        self::assertSame(['document-aggregate_language-de-hash'], $this->index->argumentOf('deleteDocuments'));
+    }
+
     public function testAnEmptyIndexNeedsNoDeletions(): void
     {
         $this->nodeIndexer->assumeEmptyIndex();

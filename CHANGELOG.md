@@ -14,6 +14,44 @@ and above - are not part of the history below.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Indexing one variant of a node no longer removes the variants of other dimensions.**
+  `indexNode()` deleted every document of the node aggregate but re-added only the
+  node's own dimension combination and the combinations falling back to it, so
+  publishing or even editing the German variant of a page removed its English one from
+  the index. It now replaces exactly those combinations and leaves the others alone.
+- **Hiding or removing a variant also removes it from the combinations falling back to
+  it.** `removeNode()` deleted a single document, so a page hidden in English stayed
+  findable in every locale falling back to English. It now replaces the same set of
+  combinations from the live workspace, which also lets a combination fall back to the
+  next variant, and it rebuilds the document a removed content node belonged to.
+- A variant hidden only in a user workspace no longer removes the live document.
+- Publishing content moved between fulltext roots refreshes both the old and new
+  roots using immutable aggregate identifiers and target dimensions.
+- Published document-type changes that alter the fulltext-root role remove the
+  previous document and rebuild the affected roots.
+- Hidden ancestors exclude descendant documents from extraction. Hide/unhide
+  publishes refresh descendants without modifying their own hidden properties.
+- Runtime repairs eagerly inject the configured indexer, preventing Flow's lazy
+  dependency proxy from failing the concrete type guard on the first publish.
+  Interface-based selection of the queueing decorator is preserved.
+- Direct-live document moves refresh changed variants and descendant documents
+  through `nodePathChanged`, deduplicated within a persistence batch.
+- Document-move publishes refresh descendant roots after persistence, when
+  their internally updated paths are queryable. Deleting a document also
+  repairs descendant root identifiers captured before physical deletion.
+- Scheduled reconciliation traverses each affected target combination, including
+  children authored only in a more-specific fallback locale.
+- Extraction uses the current time instead of a long-lived worker's start time
+  when evaluating scheduled visibility.
+
+### Changed
+
+- `NodeIndexer::replaceVariants()` is public, so deferred indexers can replay a repair
+  after the node is gone. Runtime structural repairs and scheduled reconciliation
+  use the same variant replacement and descendant traversal paths.
+
 ## [2.13.0] - 2026-09-19
 
 ### Fixed

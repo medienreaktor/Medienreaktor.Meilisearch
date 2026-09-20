@@ -137,11 +137,13 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
     }
 
     /**
-     * Add or update a node in the index with all node variants.
+     * Add or update a node in the index: the document of its own dimension combination
+     * and of every combination falling back to it. Documents of unrelated combinations,
+     * such as another language, are left alone.
      *
      * @param NodeInterface $node
      * @param string $targetWorkspace
-     * @param bool $indexAllDimensions
+     * @param bool $indexAllDimensions Together with $indexFallbackDimensions: whether to replace the fallback combinations too
      * @param bool $indexFallbackDimensions Whether to index dimensions that fall back to the current nodes dimensions
      * @param array $targetDimensionCombination Optional: Force indexing with this dimension combination (for shine-through scenarios)
      * @return void
@@ -174,29 +176,8 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
 
         // For each dimension combination, extract the node variant properties and fulltext
         $dimensionCombinations = $this->dimensionsService->getDimensionCombinationsForIndexing($node);
-        if ($indexAllDimensions && $dimensionCombinations !== []) {
-            $this->bufferIdentifierDeletion($nodeIdentifier);
-            foreach ($dimensionCombinations as $combination) {
-                if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
-                    $documents[] = $nodeVariant;
-                }
-            }
-        } elseif ($indexFallbackDimensions && $dimensionCombinations !== []) {
-            // Index only the current dimension and all dimensions that fall back to the current nodes dimensions.
-            foreach ($dimensionCombinations as $combination) {
-                // Check if current dimension and all dimensions that fall back to the current nodes dimensions
-                if ($this->dimensionsService->combinationFallsBackTo($node->getContext()->getDimensions(), $combination)) {
-                    // delete previously indexed variant with same dimensions
-                    $dimensionsHash = $this->dimensionsService->hash($combination);
-                    $this->bufferDocumentDeletion(
-                        $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash)
-                    );
-                    // Index the new node variant
-                    if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
-                        $documents[] = $nodeVariant;
-                    }
-                }
-            }
+        if (($indexAllDimensions || $indexFallbackDimensions) && $dimensionCombinations !== []) {
+            $this->replaceVariants($nodeIdentifier, $dimensionCombinations);
         } else {
             // Index only the current dimension combination without any fallbacks
             // Use targetDimensionCombination if provided (for shine-through/fallback scenarios)
@@ -231,15 +212,18 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
     protected function extractNodeVariant(string $nodeIdentifier, array $dimensionCombination = []): ?array
     {
         if ($dimensionCombination !== []) {
-            $context = $this->contextFactory->create(['workspaceName' => 'live', 'dimensions' => $dimensionCombination]);
+            $context = $this->contextFactory->create(['workspaceName' => 'live', 'dimensions' => $dimensionCombination, 'currentDateTime' => new \DateTimeImmutable()]);
         } else {
-            $context = $this->contextFactory->create(['workspaceName' => 'live']);
+            $context = $this->contextFactory->create(['workspaceName' => 'live', 'currentDateTime' => new \DateTimeImmutable()]);
         }
 
         $node = $context->getNodeByIdentifier($nodeIdentifier);
 
         if ($node !== null) {
             $node = $this->requireTraversable($node);
+            if (!self::isFulltextRoot($node) || !$this->isNodeAndAncestorsVisible($node)) {
+                return null;
+            }
             // Use dimensionCombination for hash when provided (handles fallback/shine-through)
             // This ensures content visible in English is indexed with English hash even if
             // the underlying node is German
@@ -291,8 +275,53 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
      */
     public function removeNode(NodeInterface $node): void
     {
-        $identifier = $this->generateUniqueNodeIdentifier($this->requireTraversable($node));
-        $this->bufferDocumentDeletion($identifier);
+        $node = $this->requireTraversable($node);
+        $fulltextRoot = $this->findFulltextRoot($node) ?? $node;
+
+        $this->replaceVariants(
+            (string) $fulltextRoot->getNodeAggregateIdentifier(),
+            $this->dimensionsService->getDimensionCombinationsForIndexing($fulltextRoot)
+        );
+        $this->flushIfBufferIsFull();
+    }
+
+    /**
+     * Replace the documents of the given combinations with what the live workspace shows
+     * in each of them. A combination that no longer resolves to a visible variant keeps
+     * only its deletion.
+     *
+     * Public for deferred indexers: they can persist the aggregate identifier and the
+     * combinations while the node still exists, and replay the removal after its
+     * NodeData is gone.
+     *
+     * @param string $nodeIdentifier
+     * @param array $dimensionCombinations
+     * @return void
+     */
+    public function replaceVariants(string $nodeIdentifier, array $dimensionCombinations): void
+    {
+        foreach ($dimensionCombinations as $combination) {
+            $this->bufferDocumentDeletion(
+                $this->generateDocumentIdentifier($nodeIdentifier, $this->dimensionsService->hash($combination))
+            );
+            if ($document = $this->extractNodeVariant($nodeIdentifier, $combination)) {
+                $this->bufferDocument($document);
+            }
+        }
+    }
+
+    /**
+     * Remove a document when its immutable Meilisearch identifier is already known.
+     *
+     * Deferred indexers can persist this identifier while the node still exists
+     * and execute the removal even if its NodeData disappears in the meantime.
+     *
+     * @param string $documentIdentifier
+     * @return void
+     */
+    public function removeDocumentByIdentifier(string $documentIdentifier): void
+    {
+        $this->bufferDocumentDeletion($documentIdentifier);
         $this->flushIfBufferIsFull();
     }
 
@@ -506,7 +535,7 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
      * @param NodeInterface $node
      * @return bool
      */
-    protected static function isFulltextRoot(NodeInterface $node): bool
+    public static function isFulltextRoot(NodeInterface $node): bool
     {
         if ($node->getNodeType()->hasConfiguration('search')) {
             $searchSettingsForNode = $node->getNodeType()->getConfiguration('search');
@@ -516,6 +545,47 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
         }
 
         return false;
+    }
+
+    public function isNodeAndAncestorsVisible(NodeInterface $node): bool
+    {
+        $context = $node->getContext();
+        if (!$context->isInvisibleContentShown() || !$context->isInaccessibleContentShown() || !$context->isRemovedContentShown()) {
+            // A public context filters hidden parents out of getParent(), which would
+            // incorrectly make an invisible rootline look as if it ended here.
+            $maintenanceContext = $this->contextFactory->create(array_merge($context->getProperties(), [
+                'invisibleContentShown' => true,
+                'inaccessibleContentShown' => true,
+                'removedContentShown' => true,
+            ]));
+            $node = $maintenanceContext->getNodeByIdentifier($node->getIdentifier());
+            if ($node === null) {
+                return false;
+            }
+        }
+        while (true) {
+            if ($node->isRemoved() || !$node->isVisible() || !$node->isAccessible()) {
+                return false;
+            }
+            try {
+                $node = $this->requireTraversable($this->requireTraversable($node)->findParentNode());
+            } catch (NodeException $exception) {
+                return $node->getPath() === '/';
+            }
+        }
+    }
+
+    /** @return array<string, NodeInterface> */
+    public function collectFulltextRoots(NodeInterface $node): array
+    {
+        $roots = [];
+        if (self::isFulltextRoot($node)) {
+            $roots[$node->getIdentifier()] = $node;
+        }
+        foreach ($node->getChildNodes() as $child) {
+            $roots += $this->collectFulltextRoots($child);
+        }
+        return $roots;
     }
 
     protected function extractPropertiesAndFulltext(NodeInterface $node, array &$fulltextData, \Closure $nonIndexedPropertyErrorHandler = null): array

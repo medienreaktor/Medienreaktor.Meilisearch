@@ -36,6 +36,13 @@ Medienreaktor:
       readonlyApiKeyUid: ''
     tenantToken:
       expiresIn: 0
+    scheduledVisibilityReconciliation:
+      # Opt in explicitly. The default remains snapshot indexing of content
+      # which is visible when it is indexed or when nodeindex:build is run.
+      enabled: false
+      # Routine runs inspect boundaries in this trailing window. Set it longer
+      # than the command interval and use --all after a longer scheduler outage.
+      lookbackSeconds: 3600
     settings:
       displayedAttributes:
         - '*'

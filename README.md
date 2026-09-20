@@ -90,6 +90,25 @@ Medienreaktor:
 
 Please do not remove, only extend, above `filterableAttributes`, as they are needed for base functionality to work. After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`.
 
+Normal property edits replace only the node's own dimension combination and the combinations falling back to it. Publishing content moved between fulltext roots also refreshes the previous root. Published changes to a document's fulltext-root role remove its previous document and refresh the affected roots. Hiding or showing an ancestor refreshes descendant fulltext roots without changing their own hidden flags. Extraction checks the entire live rootline, including hidden, removed and inaccessible ancestors. Document-move publishes refresh affected descendants whose paths changed internally; direct-live document moves refresh each changed variant and descendant through `nodePathChanged`.
+
+These listeners follow `Neos.ContentRepository.Search.realtimeIndexing.enabled`. After updating the package, run `./flow neos.flow:package:rescan` so Flow discovers its package bootstrap, flush Flow caches to rebuild the dependency-injection proxies, and restart queue workers. The runtime repair service eagerly resolves the configured indexer (including its queueing decorator), so its concrete type guard also works on the first publish in a request. Scheduled visibility still requires the separately enabled reconciliation command; its traversal includes fallback-only children in each affected target combination.
+
+The following changes do not emit sufficient runtime events and require an explicit full reindex:
+
+- NodeType search configuration changes, including `search.fulltext.isRoot`, extractors and required index attributes.
+- Content repository migrations and bulk NodeType conversions, including document/content restructurings.
+- Added, removed or renamed dimension presets, changed fallback chains or dimension names.
+- Direct database/NodeData writes and imports or CLI code bypassing the Node API and indexing services. Direct-live content moves between roots must explicitly refresh both roots.
+- One-time cleanup of stale documents created before installing these runtime fixes.
+
+Empty the index and rebuild it; a build alone cannot delete unreachable documents or old dimension IDs:
+
+```bash
+flow nodeindex:flush
+flow nodeindex:build --assume-empty-index --wait
+```
+
 Document NodeTypes should be configured as fulltext root (this comes by default for all `Neos.Neos:Document` subtypes):
 
 ```yaml
@@ -267,6 +286,42 @@ Medienreaktor:
 ```
 
 `tenantToken.expiresIn: 0` is the default and creates a token without an expiry claim. This is useful when the token is rendered through cached Fusion output. Set a positive value in seconds only if your rendered frontend configuration is not cached beyond that token lifetime.
+
+### Scheduled visibility reconciliation (opt in)
+
+The default indexing behaviour remains snapshot-based: `nodeindex:build` and
+normal node indexing only write content which is visible at that moment. No
+background process is enabled by this package.
+
+If content using `hiddenBeforeDateTime` or `hiddenAfterDateTime` must enter and
+leave the search index at those boundaries, enable the reconciliation command:
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    scheduledVisibilityReconciliation:
+      enabled: true
+      lookbackSeconds: 3600
+```
+
+Preview the initial reconciliation, then apply it:
+
+```bash
+./flow scheduledvisibility:reconcile --all --dry-run
+./flow scheduledvisibility:reconcile --all
+```
+
+Afterwards, invoke `scheduledvisibility:reconcile` periodically. The
+lookback should be longer than the invocation interval. The command is
+idempotent; use `--all` to recover after an outage longer than the lookback.
+You can also pass explicit `--since` and `--until` values understood by PHP's
+`DateTimeImmutable`.
+
+The command delegates every operation to Neos'
+`NodeIndexerInterface`. If `CodeQ.Meilisearch.QueueIndexer` is installed and
+live asynchronous indexing is enabled, reconciliation operations are enqueued
+onto its live queue and require the queue worker to be running. Without a queue
+decorator, the same operations execute synchronously.
 
 You can pass additional Meilisearch filter expressions as the fifth argument:
 
