@@ -122,7 +122,8 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
         $filters = [
             '(__parentPath = "' . $this->escapeFilterValue($siteNodePath) . '" OR __path = "' . $this->escapeFilterValue($siteNodePath) . '")',
             '__dimensionsHash = "' . $this->escapeFilterValue($dimensionsHash) . '"',
-            '_hidden = false',
+            // Not `= false`: types without Neos.Neos:Hidable, such as a site's homepage, have no _hidden attribute.
+            'NOT _hidden = true',
         ];
 
         return implode(' AND ', array_merge(

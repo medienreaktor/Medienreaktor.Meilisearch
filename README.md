@@ -280,8 +280,12 @@ The third argument is the Meilisearch index name. The package default index name
 The generated token enforces this filter, followed by one term per exclude rule (see below):
 
 ```text
-(__parentPath = "$siteNodePath" OR __path = "$siteNodePath") AND __dimensionsHash = "$dimensionsHash" AND _hidden = false AND _hiddenInIndex = false
+(__parentPath = "$siteNodePath" OR __path = "$siteNodePath") AND __dimensionsHash = "$dimensionsHash" AND NOT _hidden = true AND _hiddenInIndex = false
 ```
+
+The hidden term is negated because `_hidden` is only indexed for `Neos.Neos:Hidable` node
+types: a document of a type that cannot be hidden, such as a site's homepage, has no such
+attribute and stays searchable.
 
 Configure a Meilisearch search key and its key UID for token generation:
 

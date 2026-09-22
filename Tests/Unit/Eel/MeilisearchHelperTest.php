@@ -85,9 +85,22 @@ class MeilisearchHelperTest extends TestCase
 
         self::assertSame(
             '(__parentPath = "' . self::SITE_PATH . '" OR __path = "' . self::SITE_PATH . '") '
-                . 'AND __dimensionsHash = "' . self::DIMENSIONS_HASH . '" AND _hidden = false',
+                . 'AND __dimensionsHash = "' . self::DIMENSIONS_HASH . '" AND NOT _hidden = true',
             $filter
         );
+    }
+
+    /**
+     * `_hidden` is only indexed through Neos.Neos:Hidable, so a document of a type without
+     * it - typically a site's homepage - has no such attribute. `_hidden = false` would drop
+     * it from every search; the negated term keeps it and still excludes hidden documents.
+     */
+    public function testKeepsDocumentsOfTypesThatCannotBeHidden(): void
+    {
+        $filter = $this->filter();
+
+        self::assertStringContainsString('NOT _hidden = true', $filter);
+        self::assertStringNotContainsString('_hidden = false', $filter);
     }
 
     /**
@@ -100,7 +113,7 @@ class MeilisearchHelperTest extends TestCase
             'excludeRules' => ['hiddenFromSearch' => ['attribute' => 'hiddenFromSearch', 'value' => true]],
         ]);
 
-        self::assertStringEndsWith('AND _hidden = false AND _hiddenInIndex = false AND NOT hiddenFromSearch = true', $filter);
+        self::assertStringEndsWith('AND NOT _hidden = true AND _hiddenInIndex = false AND NOT hiddenFromSearch = true', $filter);
     }
 
     public function testKeepsPerCallFiltersLast(): void

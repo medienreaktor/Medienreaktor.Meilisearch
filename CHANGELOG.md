@@ -21,7 +21,8 @@ and above - are not part of the history below.
   filter the tenant token enforces - for a site's own boolean property, or for a node type
   through `__nodeTypeAndSupertypes`. Documents without the attribute stay searchable, so a
   newly introduced property does not empty the search before the index is rebuilt.
-  `excludeHiddenInIndex` is unchanged, and a filter without rules is exactly what it was.
+  `excludeHiddenInIndex` is unchanged, and a filter without rules is what it was apart
+  from the negated hidden term (see Fixed).
 - `nodeindex:createindex --wait` and `--timeout`, so a deployment can make sure Meilisearch
   has applied new filterable attributes before pages render tokens that filter by them.
 
@@ -38,6 +39,14 @@ and above - are not part of the history below.
 
 ### Fixed
 
+- **Documents of node types that cannot be hidden are no longer dropped by the frontend
+  filter.** It required `_hidden = false`, but `_hidden` is only indexed for
+  `Neos.Neos:Hidable`, so a type that opts out of it - typically a site's homepage - had
+  no such attribute and was missing from every search, and a site that consists of
+  nothing but its homepage returned no results at all. The term is now
+  `NOT _hidden = true`: hidden documents stay excluded, documents without the attribute
+  are kept, as with the exclude rules. Tokens rendered into cached output keep their old
+  filter until the output is rendered again.
 - **Pages hidden in menus can be kept searchable.** The frontend filter always excluded
   documents with `_hiddenInIndex = true`, which is the Neos "Hide in menus" flag - a
   navigation setting that does not have to mean a page should be unfindable. Because the
