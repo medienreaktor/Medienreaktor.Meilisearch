@@ -43,17 +43,20 @@ Medienreaktor:
         - __fulltext.h4
         - __fulltext.h5
         - __fulltext.h6
+      # Maps, not lists: Flow merges lists by position, so packages adding entries
+      # would overwrite each other. Add an attribute with `name: true`, drop one
+      # with `name: false`.
       filterableAttributes:
-        - __identifier
-        - __dimensionsHash
-        - __path
-        - __parentPath
-        - __nodeType
-        - __nodeTypeAndSupertypes
-        - _hidden
-        - _hiddenBeforeDateTime
-        - _hiddenAfterDateTime
-        - _hiddenInIndex
-        - _geo
+        __identifier: true
+        __dimensionsHash: true
+        __path: true
+        __parentPath: true
+        __nodeType: true
+        __nodeTypeAndSupertypes: true
+        _hidden: true
+        _hiddenBeforeDateTime: true
+        _hiddenAfterDateTime: true
+        _hiddenInIndex: true
+        _geo: true
       sortableAttributes:
-        - _geo
+        _geo: true

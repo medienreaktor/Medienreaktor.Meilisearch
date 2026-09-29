@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Domain\Service;
 
 use Exception;
+use Medienreaktor\Meilisearch\Domain\Model\IndexSettings;
 use Meilisearch\Client;
 use Meilisearch\Contracts\DocumentsQuery;
 use Meilisearch\Contracts\IndexesQuery;
@@ -115,7 +116,7 @@ class MeilisearchIndex implements IndexInterface {
         $this->awaitTask($this->client->createIndex($buildIndexName));
         $buildIndex = $this->client->index($buildIndexName);
         $this->awaitTask($buildIndex->update(['primaryKey' => 'id']));
-        $this->awaitTask($buildIndex->updateSettings($this->indexSettings));
+        $this->awaitTask($buildIndex->updateSettings(IndexSettings::fromConfiguration($this->indexSettings)->toArray()));
 
         return $buildIndexName;
     }
@@ -239,7 +240,7 @@ class MeilisearchIndex implements IndexInterface {
 
     public function createIndex(): void {
         $this->client->createIndex($this->indexName);
-        $this->index->updateSettings($this->indexSettings);
+        $this->index->updateSettings(IndexSettings::fromConfiguration($this->indexSettings)->toArray());
         $this->index->update(['primaryKey' => 'id']);
     }
 
@@ -307,7 +308,7 @@ class MeilisearchIndex implements IndexInterface {
      * @return array|FALSE
      */
     public function findAllIdentifiersByIdentifier(string $identifier) {
-        $results = $this->index->search('', ['filter' => ['__identifier = ' . $identifier]]);
+        $results = $this->index->search('', ['filter' => ['__identifier = "' . $identifier . '"']]);
 
         $hits = [];
         foreach ($results->getHits() as $hit) {

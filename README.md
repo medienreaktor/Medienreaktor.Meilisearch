@@ -55,19 +55,19 @@ Medienreaktor:
         - '__fulltext.h5'
         - '__fulltext.h6'
       filterableAttributes:
-        - '__identifier'
-        - '__dimensionsHash'
-        - '__path'
-        - '__parentPath'
-        - '__nodeType'
-        - '__nodeTypeAndSupertypes'
-        - '_hidden'
-        - '_hiddenBeforeDateTime'
-        - '_hiddenAfterDateTime'
-        - '_hiddenInIndex'
-        - '_geo'
+        __identifier: true
+        __dimensionsHash: true
+        __path: true
+        __parentPath: true
+        __nodeType: true
+        __nodeTypeAndSupertypes: true
+        _hidden: true
+        _hiddenBeforeDateTime: true
+        _hiddenAfterDateTime: true
+        _hiddenInIndex: true
+        _geo: true
       sortableAttributes:
-        - '_geo'
+        _geo: true
       rankingRules:
         - 'words'
         - 'typo'
@@ -85,7 +85,24 @@ Medienreaktor:
         maxValuesPerFacet: 100
 ```
 
-Please do not remove, only extend, above `filterableAttributes`, as they are needed for base functionality to work. After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`.
+`filterableAttributes` and `sortableAttributes` are maps, not lists. Flow merges YAML
+lists by position, so two packages that each added list entries overwrote each other
+depending on load order. With a map, every package adds its attributes by name:
+
+```yaml
+Medienreaktor:
+  Meilisearch:
+    settings:
+      filterableAttributes:
+        datePublished: true
+      sortableAttributes:
+        datePublished: true
+```
+
+`false` switches an attribute off again. A list entry left over from 2.x is rejected
+with an exception when the index settings are applied (`nodeindex:createindex`,
+`nodeindex:rebuild`) rather than merged wrongly. Do not switch off the attributes
+above, as they are needed for base functionality to work. After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`.
 
 ### Rebuilding without downtime
 
