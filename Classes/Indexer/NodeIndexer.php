@@ -316,6 +316,11 @@ class NodeIndexer extends AbstractNodeIndexer {
                 }
             }
         }
+        // `search.fulltext.excludeChildren: true` skips the node's whole subtree.
+        $searchConfiguration = $nodeType->hasConfiguration('search') ? $nodeType->getConfiguration('search') : [];
+        if (($searchConfiguration['fulltext']['excludeChildren'] ?? false) === true) {
+            return;
+        }
         $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($node->dimensionSpacePoint, VisibilityConstraints::createEmpty());
         $childNodes = $subgraph->findChildNodes($node->aggregateId, $filter);
 
