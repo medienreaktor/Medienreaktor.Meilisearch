@@ -12,6 +12,9 @@
     __aggregateId:
       search:
         indexing: '${node.aggregateId}'
+    __identifier:
+      search:
+        indexing: '${node.aggregateId}'
     __path:
       search:
         indexing: '${Indexing.aggregateIdPath(node)}'
@@ -45,6 +48,9 @@ unstructured:
       search:
         indexing: '${node.nodeTypeName}'
     __aggregateId:
+      search:
+        indexing: '${node.aggregateId}'
+    __identifier:
       search:
         indexing: '${node.aggregateId}'
     __path:
