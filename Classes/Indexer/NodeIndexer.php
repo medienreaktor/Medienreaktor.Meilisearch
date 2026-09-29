@@ -105,8 +105,9 @@ class NodeIndexer extends AbstractNodeIndexer {
             // The node aggregate identifier is a shared node identifier across all variants
             $nodeIdentifier = (string)$node->aggregateId;
 
-            $allIndexedVariants = $this->indexClient->findAllIdentifiersByIdentifier($nodeIdentifier);
-            $this->indexClient->deleteDocuments($allIndexedVariants);
+            // By filter rather than search-then-delete: a search returns at most 20 hits,
+            // which silently left variants behind on sites with more dimension combinations.
+            $this->indexClient->deleteByFilter('__identifier = "' . $nodeIdentifier . '"');
 
             $documents = [];
 
