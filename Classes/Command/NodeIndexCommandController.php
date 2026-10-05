@@ -78,13 +78,21 @@ class NodeIndexCommandController extends CommandController
     /**
      * Create the index.
      *
+     * @param bool $wait Return only once Meilisearch has applied the index settings, and fail if it did not succeed
+     * @param int $timeout How long to wait, in seconds; only meaningful together with --wait
      * @return void
      * @throws Exception
      */
-    public function createIndexCommand(): void
+    public function createIndexCommand(bool $wait = false, int $timeout = self::DEFAULT_WAIT_TIMEOUT_IN_SECONDS): void
     {
         $this->indexClient->createIndex();
         $this->outputLine('Index created successfully.');
+
+        if ($wait) {
+            $this->outputLine('Waiting up to %d seconds for Meilisearch to apply the index settings...', [$timeout]);
+            $this->indexClient->waitForPendingTasks($timeout);
+            $this->outputLine('Index settings are applied.');
+        }
     }
 
     /**
@@ -172,6 +180,8 @@ class NodeIndexCommandController extends CommandController
             $this->outputLine('Waiting up to %d seconds for Meilisearch to finish indexing...', [$timeout]);
             // The indexer's own client, which is the one holding the enqueued tasks.
             $this->nodeIndexer->getIndexClient()->waitForPendingTasks($timeout);
+            // The settings update from createIndex() above is held by this command's client.
+            $this->indexClient->waitForPendingTasks($timeout);
             $this->outputLine('Index is up to date.');
         }
     }

@@ -285,4 +285,76 @@ class MeilisearchIndexTest extends TestCase
 
         $index->waitForPendingTasks(30);
     }
+
+    /**
+     * @param array<string, mixed> $properties
+     */
+    private function configured(MeilisearchIndex $index, array $properties): MeilisearchIndex
+    {
+        $reflection = new \ReflectionObject($index);
+        foreach ($properties as $name => $value) {
+            $property = $reflection->getProperty($name);
+            $property->setAccessible(true);
+            $property->setValue($index, $value);
+        }
+
+        return $index;
+    }
+
+    /**
+     * A tenant token carries the frontend filter into every browser search, and
+     * Meilisearch rejects a whole search whose filter names an attribute it cannot filter
+     * by. A site's own filterableAttributes list overwrites the package's by position, so
+     * the attributes are added in code, after whatever was configured.
+     */
+    public function testCreateIndexMakesEveryAttributeTheFrontendFilterNamesFilterable(): void
+    {
+        $this->configured($this->index('test'), [
+            'indexSettings' => ['filterableAttributes' => ['__identifier', '__path']],
+            'frontendFilterSettings' => [
+                'excludeRules' => ['hiddenFromSearch' => ['attribute' => 'hiddenFromSearch', 'value' => true]],
+            ],
+        ])->createIndex();
+
+        self::assertSame('/indexes/test/settings', $this->transport->paths()[1]);
+        self::assertSame(
+            ['__identifier', '__path', '__parentPath', '__dimensionsHash', '_hidden', '_hiddenInIndex', 'hiddenFromSearch'],
+            $this->decodedBody(1)['filterableAttributes']
+        );
+    }
+
+    public function testCreateIndexLeavesGranularFilterableAttributeEntriesAsConfigured(): void
+    {
+        $granular = ['attributePatterns' => ['release*'], 'features' => ['filter' => ['equality' => true]]];
+
+        $this->configured($this->index('test'), [
+            'indexSettings' => ['filterableAttributes' => [$granular, '__parentPath']],
+            'frontendFilterSettings' => ['excludeHiddenInIndex' => false],
+        ])->createIndex();
+
+        self::assertSame(
+            [$granular, '__parentPath', '__path', '__dimensionsHash', '_hidden'],
+            $this->decodedBody(1)['filterableAttributes']
+        );
+    }
+
+    /**
+     * A settings update that fails would otherwise go unnoticed until the first search
+     * that needs one of its attributes, so a caller that waits is told.
+     */
+    public function testCreateIndexLetsAWaitReportAFailedSettingsUpdate(): void
+    {
+        $index = $this->configured($this->index('test'), ['indexSettings' => []]);
+        $index->createIndex();
+        $this->transport->responses = [
+            ['results' => []],
+            ['results' => [['uid' => 1, 'error' => ['message' => 'invalid filterable attributes']]]],
+        ];
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionCode(1787000102);
+        $this->expectExceptionMessageMatches('/invalid filterable attributes/');
+
+        $index->waitForPendingTasks(30);
+    }
 }
