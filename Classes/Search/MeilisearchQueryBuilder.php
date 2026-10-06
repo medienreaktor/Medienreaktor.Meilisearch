@@ -316,7 +316,10 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
             FindAncestorNodesFilter::create()
         )->reverse();
 
-        $nodeAggregateIdPath = NodeAggregateIdPath::fromNodes($ancestors);
+        // The indexed __path of a node lists its ancestors only, not the node itself. The
+        // context node therefore has to be part of the path, or the query would match the
+        // descendants of its parent, i.e. its siblings' subtrees as well.
+        $nodeAggregateIdPath = NodeAggregateIdPath::fromNodes($ancestors->append($contextNode));
         $this->parameters['filter'][] = '(__parentPath = "' . $nodeAggregateIdPath->serializeToString() . '" OR __path = "' . $nodeAggregateIdPath->serializeToString() . '")';
         $this->parameters['filter'][] = '__dimensionsHash = "' . $dimensionsHash . '"';
 

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-10-06
+
+### Fixed
+
+- `Search.query(node)` only searches below the given node. The path filter left the
+  node itself out, so the query covered everything below its parent: a press list
+  queried for its overview page also listed the articles of sibling pages, and a
+  site search queried for the site node returned the other sites in the content
+  repository. No reindex needed; only the query changed.
+
 ## [3.0.0] - 2026-09-29
 
 ### Changed
