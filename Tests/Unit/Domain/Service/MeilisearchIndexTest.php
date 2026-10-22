@@ -85,6 +85,58 @@ class MeilisearchIndexTest extends TestCase
         return (array) json_decode((string) $this->transport->requests[$position]->getBody(), true);
     }
 
+    private function indexWithSettings(array $settings): MeilisearchIndex
+    {
+        $index = $this->index('test');
+        $property = (new \ReflectionObject($index))->getProperty('indexSettings');
+        $property->setAccessible(true);
+        $property->setValue($index, $settings);
+
+        return $index;
+    }
+
+    /**
+     * Queues what the server answers before a settings update: the index's stats,
+     * then its current settings.
+     */
+    private function serverHolds(int $documentCount, array $embedders): void
+    {
+        $this->transport->responses = [
+            ['numberOfDocuments' => $documentCount, 'isIndexing' => false, 'fieldDistribution' => []],
+            ['embedders' => $embedders],
+        ];
+    }
+
+    /**
+     * The body of the settings update, which is the request whose content matters.
+     */
+    private function settingsUpdate(): array
+    {
+        $found = null;
+        foreach ($this->transport->requests as $position => $request) {
+            if ($request->getMethod() === 'PATCH' && $request->getUri()->getPath() === '/indexes/test/settings') {
+                $found = $position;
+            }
+        }
+
+        self::assertNotNull($found, 'No settings update was sent.');
+
+        return $this->decodedBody($found);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function embedder(string $documentTemplate, string $apiKey): array
+    {
+        return [
+            'source' => 'openAi',
+            'model' => 'text-embedding-3-large',
+            'documentTemplate' => $documentTemplate,
+            'apiKey' => $apiKey,
+        ];
+    }
+
     public function testDeleteByFilterReachesTheFilterEndpointAndNotTheBatchEndpoint(): void
     {
         $this->index('test')->deleteByFilter(['__identifier = "abc"']);
@@ -284,5 +336,101 @@ class MeilisearchIndexTest extends TestCase
         $this->expectExceptionMessageMatches('/index primary key mismatch/');
 
         $index->waitForPendingTasks(30);
+    }
+
+    /**
+     * A template that differs from the server's would make Meilisearch re-embed the
+     * whole index inside the settings task; createIndex() runs on every deployment, so
+     * that must not happen as a side effect. The new apiKey still has to get through.
+     */
+    public function testCreateIndexHoldsBackATemplateChangeOnAFilledIndexButAppliesTheApiKey(): void
+    {
+        $index = $this->indexWithSettings([
+            'searchableAttributes' => ['title'],
+            'embedders' => ['default' => $this->embedder('{{doc.__markdown}}', 'new-key')],
+        ]);
+        $this->serverHolds(386513, ['default' => $this->embedder('{{doc.title}} {{doc.__markdown}}', 'sk-…XXXX')]);
+
+        $index->createIndex();
+
+        self::assertSame(
+            ['searchableAttributes' => ['title'], 'embedders' => ['default' => ['apiKey' => 'new-key']]],
+            $this->settingsUpdate()
+        );
+        self::assertCount(1, $index->getSkippedEmbedderChanges());
+        self::assertStringContainsString('documentTemplate', $index->getSkippedEmbedderChanges()[0]);
+    }
+
+    /**
+     * Rotating a key is the case that has to keep working: only the masked apiKey
+     * differs from the server, which Meilisearch applies without re-embedding.
+     */
+    public function testCreateIndexAppliesAnEmbedderWhoseOnlyChangeIsTheApiKey(): void
+    {
+        $embedder = $this->embedder('{{doc.__markdown}}', 'new-key');
+        $index = $this->indexWithSettings(['embedders' => ['default' => $embedder]]);
+        $this->serverHolds(10, ['default' => $this->embedder('{{doc.__markdown}}', 'sk-…XXXX')]);
+
+        $index->createIndex();
+
+        self::assertSame(['embedders' => ['default' => $embedder]], $this->settingsUpdate());
+        self::assertSame([], $index->getSkippedEmbedderChanges());
+    }
+
+    /**
+     * Adding an embedder embeds every document just as changing one does.
+     */
+    public function testCreateIndexDoesNotAddAnEmbedderToAFilledIndex(): void
+    {
+        $index = $this->indexWithSettings([
+            'searchableAttributes' => ['title'],
+            'embedders' => ['default' => $this->embedder('{{doc.__markdown}}', 'new-key')],
+        ]);
+        $this->serverHolds(10, []);
+
+        $index->createIndex();
+
+        self::assertSame(['searchableAttributes' => ['title']], $this->settingsUpdate());
+        self::assertStringContainsString('not on the server yet', $index->getSkippedEmbedderChanges()[0]);
+    }
+
+    public function testCreateIndexAppliesEmbedderChangesToAnEmptyIndex(): void
+    {
+        $settings = ['embedders' => ['default' => $this->embedder('{{doc.__markdown}}', 'new-key')]];
+        $index = $this->indexWithSettings($settings);
+        $this->serverHolds(0, ['default' => $this->embedder('{{doc.title}}', 'sk-…XXXX')]);
+
+        $index->createIndex();
+
+        self::assertSame($settings, $this->settingsUpdate());
+    }
+
+    /**
+     * Asked for explicitly, the change goes through without even reading the server.
+     */
+    public function testCreateIndexAppliesEmbedderChangesWhenReembeddingIsAllowed(): void
+    {
+        $settings = ['embedders' => ['default' => $this->embedder('{{doc.__markdown}}', 'new-key')]];
+        $index = $this->indexWithSettings($settings);
+        $index->allowReembedding();
+
+        $index->createIndex();
+
+        self::assertSame(['/indexes', '/indexes/test/settings'], $this->transport->paths());
+        self::assertSame($settings, $this->settingsUpdate());
+    }
+
+    /**
+     * Other indexes reuse this class with their own settings - the chat store among
+     * them - so the guard has to cover that path too.
+     */
+    public function testUpdateCustomSettingsHoldsBackATemplateChangeOnAFilledIndex(): void
+    {
+        $index = $this->index('test');
+        $this->serverHolds(83036, ['default' => $this->embedder('answer: {{doc.chatCompletion}}', 'sk-…XXXX')]);
+
+        $index->updateCustomSettings(['embedders' => ['default' => $this->embedder('{{doc.__markdown}}', 'new-key')]]);
+
+        self::assertSame(['embedders' => ['default' => ['apiKey' => 'new-key']]], $this->settingsUpdate());
     }
 }

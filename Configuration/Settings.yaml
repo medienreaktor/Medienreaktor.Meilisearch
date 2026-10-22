@@ -29,6 +29,11 @@ Medienreaktor:
       # Meilisearch queues one task per write request, so this caps both the size of
       # a request and how many tasks an index run adds to the queue.
       batchSize: 1000
+      # Meilisearch re-embeds every document when an embedder changes in anything but
+      # its apiKey. On an index that already has documents such changes are held back
+      # and reported, and only a new apiKey is applied. Set to true - or pass
+      # --allow-reembedding to nodeindex:createindex / nodeindex:build - to apply them.
+      allowReembedding: false
     client:
       endpoint: ''
       apiKey: ''
