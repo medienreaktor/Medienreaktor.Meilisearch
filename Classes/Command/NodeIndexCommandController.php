@@ -7,6 +7,7 @@ namespace Medienreaktor\Meilisearch\Command;
 use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
+use Medienreaktor\Meilisearch\Domain\Service\MeilisearchIndex;
 use Medienreaktor\Meilisearch\Exception;
 use Neos\ContentRepository\Domain\Factory\NodeFactory;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
@@ -78,12 +79,16 @@ class NodeIndexCommandController extends CommandController
     /**
      * Create the index.
      *
+     * Embedder changes that would re-embed an index which already has documents are
+     * held back and reported; a new apiKey is applied either way.
+     *
+     * @param bool $allowReembedding Apply embedder changes even if Meilisearch has to re-embed every document for them
      * @return void
      * @throws Exception
      */
-    public function createIndexCommand(): void
+    public function createIndexCommand(bool $allowReembedding = false): void
     {
-        $this->indexClient->createIndex();
+        $this->createIndexWithSettings($allowReembedding);
         $this->outputLine('Index created successfully.');
     }
 
@@ -118,12 +123,13 @@ class NodeIndexCommandController extends CommandController
      * @param bool $wait Return only once Meilisearch has finished indexing, and fail if it did not succeed
      * @param int $timeout How long to wait, in seconds; only meaningful together with --wait
      * @param bool $assumeEmptyIndex Skip deletions, which cannot match anything on an index the caller has just emptied
+     * @param bool $allowReembedding Apply embedder changes even if Meilisearch has to re-embed every document for them
      * @return void
      * @throws Exception
      */
-    public function buildCommand(bool $wait = false, int $timeout = self::DEFAULT_WAIT_TIMEOUT_IN_SECONDS, bool $assumeEmptyIndex = false): void
+    public function buildCommand(bool $wait = false, int $timeout = self::DEFAULT_WAIT_TIMEOUT_IN_SECONDS, bool $assumeEmptyIndex = false, bool $allowReembedding = false): void
     {
-        $this->indexClient->createIndex();
+        $this->createIndexWithSettings($allowReembedding);
 
         if ($assumeEmptyIndex) {
             $this->nodeIndexer->assumeEmptyIndex();
@@ -173,6 +179,28 @@ class NodeIndexCommandController extends CommandController
             // The indexer's own client, which is the one holding the enqueued tasks.
             $this->nodeIndexer->getIndexClient()->waitForPendingTasks($timeout);
             $this->outputLine('Index is up to date.');
+        }
+    }
+
+    /**
+     * Only MeilisearchIndex knows about re-embedding, so the flag and the report are
+     * skipped for any other implementation bound to IndexInterface.
+     *
+     * @param bool $allowReembedding
+     * @return void
+     */
+    protected function createIndexWithSettings(bool $allowReembedding): void
+    {
+        if ($allowReembedding && $this->indexClient instanceof MeilisearchIndex) {
+            $this->indexClient->allowReembedding();
+        }
+
+        $this->indexClient->createIndex();
+
+        if ($this->indexClient instanceof MeilisearchIndex) {
+            foreach ($this->indexClient->getSkippedEmbedderChanges() as $skipped) {
+                $this->outputLine('<comment>Held back: %s Pass --allow-reembedding to apply it.</comment>', [$skipped]);
+            }
         }
     }
 
