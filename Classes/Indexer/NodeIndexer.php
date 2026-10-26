@@ -10,6 +10,7 @@ use Medienreaktor\Meilisearch\Domain\Service\RequestService;
 use Neos\ContentRepository\Core\Dimension\ContentDimensionId;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePointSet;
+use Neos\ContentRepository\Core\NodeType\NodeType;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\ContentRepository\Core\Projection\ContentGraph\NodeAggregate;
@@ -27,6 +28,7 @@ use Neos\Neos\FrontendRouting\NodeUriBuilderFactory;
 use Neos\Neos\FrontendRouting\Options;
 use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
 use Neos\Rector\ContentRepository90\Legacy\LegacyContextStub;
+use Psr\Http\Message\UriInterface;
 use Ramsey\Uuid\Exception\NodeException;
 use function RectorPrefix202304\dump;
 
@@ -177,8 +179,7 @@ class NodeIndexer extends AbstractNodeIndexer {
             $document['id'] = $identifier;
             $document['__fulltext'] = $this->truncateFulltext($fulltext);
             $document['title'] = $node->getProperty("title");
-            $uri = $this->nodeLinkService->getNodeUri($node);
-            $document['__uri'] = $uri;
+            $document['__uri'] = $this->getNodeUri($node);
 
             if (array_key_exists('__geo', $document)) {
                 $document['_geo'] = $document['__geo'];
@@ -252,8 +253,7 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @return bool
      */
     protected function isFulltextRoot(Node $node): bool {
-        $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
-        $nodeType = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
+        $nodeType = $this->getNodeType($node);
         if ($nodeType === null) {
             return false;
         }
@@ -265,6 +265,43 @@ class NodeIndexer extends AbstractNodeIndexer {
         }
 
         return false;
+    }
+
+    /**
+     * Get the public URI of the node, or null for content nodes configured as fulltext
+     * root (e.g. FAQ entries), which have no route of their own.
+     *
+     * @param Node $node
+     * @return UriInterface|null
+     */
+    protected function getNodeUri(Node $node): ?UriInterface {
+        if (!$this->isDocument($node)) {
+            return null;
+        }
+        return $this->nodeLinkService->getNodeUri($node);
+    }
+
+    /**
+     * Whether the node is a document and so has a URI of its own.
+     *
+     * Checked by type rather than by catching the routing exception, so that a document
+     * which cannot be routed still fails loudly instead of being indexed without a URI.
+     *
+     * @param Node $node
+     * @return bool
+     */
+    protected function isDocument(Node $node): bool {
+        $nodeType = $this->getNodeType($node);
+        return $nodeType !== null && $nodeType->isOfType('Neos.Neos:Document');
+    }
+
+    /**
+     * @param Node $node
+     * @return NodeType|null
+     */
+    protected function getNodeType(Node $node): ?NodeType {
+        $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
+        return $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
     }
 
     /**
