@@ -140,6 +140,16 @@ Document NodeTypes should be configured as fulltext root (this comes by default 
       enable: true
 ```
 
+Content NodeTypes can be fulltext roots too, for example to index FAQ entries individually so that each entry is found and ranked on its own. Content nodes have no URI of their own, so their `__uri` is `null`. The entry's text still counts towards the page's fulltext, and `nodeType('Neos.Neos:Document')` keeps such entries out of a page search.
+
+```yaml
+'Vendor.Site:Content.FaqEntry':
+  search:
+    fulltext:
+      isRoot: true
+      enable: true
+```
+
 Properties of Content NodeTypes that should be included in fulltext search must also be configured appropriately:
 
 ```yaml

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Content node types configured as fulltext root (`search.fulltext.isRoot: true`,
+  e.g. single FAQ entries) are indexed. Building their URI threw
+  `NoMatchingRouteException`, because only documents have a route, so on sites with
+  such a node type `nodeindex:build` and `nodeindex:rebuild` aborted and indexed
+  nothing new, pages included; indexing such a node in real time failed the same way.
+  These nodes are now indexed with `__uri: null`; documents keep their URI. No reindex
+  needed, since only nodes that failed to index before are affected; sites that hit the
+  error get them with their next `nodeindex:rebuild`.
+
 ## [3.0.1] - 2026-10-06
 
 ### Fixed
