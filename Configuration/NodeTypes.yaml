@@ -33,44 +33,6 @@
     __sortIndex:
       search:
         indexing: '${node.index}'
-unstructured:
-  properties:
-    _name:
-      search:
-        indexing: '${node.name}'
-    _path:
-      search:
-        indexing: '${Indexing.aggregateIdPath(node)}'
-    _removed:
-      search:
-        indexing: ''
-    _nodeType:
-      search:
-        indexing: '${node.nodeTypeName}'
-    __aggregateId:
-      search:
-        indexing: '${node.aggregateId}'
-    __identifier:
-      search:
-        indexing: '${node.aggregateId}'
-    __path:
-      search:
-        indexing: '${Indexing.aggregateIdPath(node)}'
-    __nodeType:
-      search:
-        indexing: '${node.nodeTypeName}'
-    __nodeTypeAndSupertypes:
-      search:
-        indexing: '${Indexing.extractNodeTypeNamesAndSupertypes(node)}'
-    __dimensionsHash:
-      search:
-        indexing: '${node.dimensionSpacePoint.hash}'
-    __parentPath:
-      search:
-        indexing: '${Array.pop(Indexing.buildAllPathPrefixes(Indexing.aggregateIdPath(node)))}'
-    __sortIndex:
-      search:
-        indexing: '${node.index}'
 'Neos.Neos:Hidable':
   properties:
     _hidden:

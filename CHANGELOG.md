@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The package no longer declares a node type named `unstructured`. Its indexing
+  configuration was a Neos 8 leftover: Neos 9 has no such node type, so the block
+  created a new, unprefixed one instead of configuring an existing one. Neos.Api
+  rejects node type names without a package prefix, so its node type listing failed
+  with a 500 and Neos Studio 2 did not load. Nothing was indexed through it, as no
+  node has that type; no reindex needed.
+
 ## [3.0.2] - 2026-10-26
 
 ### Fixed
