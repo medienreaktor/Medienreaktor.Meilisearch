@@ -71,3 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `search.fulltext.excludeChildren` on a node type skips its subtree when building
   the fulltext (released as the untracked tag 2.9.0).
+
+[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.3...HEAD
+[3.0.3]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.2...3.0.3
+[3.0.2]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.1...3.0.2
+[3.0.1]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.0...3.0.1
+[3.0.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/releases/tag/3.0.0
