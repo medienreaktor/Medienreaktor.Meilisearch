@@ -1,0 +1,387 @@
+# Standard CI of a medienreaktor Composer package, copied unchanged from the
+# set-up-ci skill (templates/package/ci.yml). Do not edit it here: everything
+# that differs between packages is read from the repository, and a change to
+# this file belongs in the template, from where it reaches every package.
+#
+#   runner            visibility: private -> hetzner, public -> ubuntu-latest
+#   PHP versions      require.php in composer.json, against PHP_VERSIONS below
+#   PHP extensions    ext-* in composer.json, plus CI_PHP_EXTENSIONS in .env
+#   PHPStan, phpcs    run once Classes/ holds a PHP file
+#   functional suite  runs once Tests/Functional/ holds a PHP file
+#   frontends         every package.json at the root or in Resources/Private/*/
+name: CI
+
+on:
+  # Every branch, so that a maintenance line (neos8, 2.x) is checked like main.
+  # Dependabot's branches are checked through their pull requests instead.
+  push:
+    branches-ignore: [ 'dependabot/**' ]
+  pull_request:
+  # Lets a commit be re-verified without an empty commit.
+  workflow_dispatch:
+
+# One run per branch: a push supersedes the previous run on the same branch, and
+# the push and pull request runs of one branch share a group, so only the newer
+# survives. Never cancelled on the default branch: a run there exists to leave a
+# verdict on a commit, and a cancelled one leaves none.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
+
+# Nothing here writes to the repository.
+permissions:
+  contents: read
+
+env:
+  # GitHub for the dist archives: installing Neos exhausts the unauthenticated
+  # API limit. Packistry for the org's private packages, bearer only (basic auth
+  # is answered with 404). PACKISTRY_TOKEN is an organisation secret that public
+  # repositories do not see; Composer ignores the empty entry there, and a public
+  # package must not depend on Packistry anyway.
+  COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"},"bearer":{"packistry.medienreaktor.de":"${{ secrets.PACKISTRY_TOKEN }}"}}'
+
+  # The PHP versions this template knows, oldest first. A package is tested on
+  # those its require.php admits. Extend it here when PHP releases a new minor.
+  PHP_VERSIONS: 8.1 8.2 8.3 8.4 8.5
+
+# Third-party actions are pinned by commit SHA, because a tag can be moved onto
+# different code after review; GitHub's own actions/* by major. Dependabot keeps
+# both current.
+jobs:
+  # Reads everything the jobs below differ by from the repository, once.
+  detect:
+    name: Detect
+    # Private: the org's runner scale set, a fresh instance per job with the
+    # toolset of GitHub's ubuntu-24.04 runner. Public: GitHub-hosted, because
+    # the org runner group does not accept public repositories (a job would queue
+    # forever) and a self-hosted runner must not run fork pull requests.
+    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    outputs:
+      floor: ${{ steps.php.outputs.floor }}
+      newest: ${{ steps.php.outputs.newest }}
+      matrix: ${{ steps.php.outputs.matrix }}
+      extensions: ${{ steps.php.outputs.extensions }}
+      code: ${{ steps.contents.outputs.code }}
+      functional: ${{ steps.contents.outputs.functional }}
+      frontends: ${{ steps.contents.outputs.frontends }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # require.php is matched with Composer's own constraint parser, which ships
+      # inside the composer phar of the runner image, so `^8.2`, `>=8.3` and
+      # `~8.3.0 || >=8.5` mean exactly what they mean to Composer. The oldest
+      # admitted version is the floor: lint runs there, and the matrix pairs it
+      # with the lowest dependencies and every admitted version with the highest.
+      - name: Read PHP versions and extensions
+        id: php
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/versions.php" <<'PHP'
+          <?php
+          Phar::loadPhar(getenv('COMPOSER_PHAR'), 'composer.phar');
+          require 'phar://composer.phar/vendor/autoload.php';
+          $constraint = json_decode(file_get_contents('composer.json'), true)['require']['php'] ?? '*';
+          $versions = array_values(array_filter(
+              preg_split('/\s+/', trim(getenv('PHP_VERSIONS'))),
+              fn ($v) => Composer\Semver\Semver::satisfies("$v.0", $constraint)
+                  || Composer\Semver\Semver::satisfies("$v.99", $constraint),
+          ));
+          if ($versions === []) {
+              fwrite(STDERR, "require.php \"$constraint\" admits none of PHP_VERSIONS.\n");
+              exit(1);
+          }
+          echo json_encode(['constraint' => $constraint, 'versions' => $versions]);
+          PHP
+          info=$(COMPOSER_PHAR="$(command -v composer)" php "$RUNNER_TEMP/versions.php")
+          floor=$(jq -r '.versions[0]' <<<"$info")
+          newest=$(jq -r '.versions[-1]' <<<"$info")
+          matrix=$(jq -c '{include: ([{php: .versions[0], deps: "lowest"}] + [.versions[] | {php: ., deps: "highest"}])}' <<<"$info")
+
+          # ext-* the package declares, plus whatever .env names for the rest:
+          # an extension only a dependency needs, which composer.json does not list.
+          extra=""
+          if [ -f .env ]; then
+            extra=$(grep -E '^CI_PHP_EXTENSIONS=' .env | tail -n1 || true)
+            extra=${extra#CI_PHP_EXTENSIONS=}; extra=${extra%%#*}; extra=${extra//[\"\']/}
+          fi
+          extensions=$(jq -r --arg extra "$extra" '
+            [(.require // {}), (.["require-dev"] // {}) | keys[] | select(startswith("ext-")) | ltrimstr("ext-")]
+            + ($extra | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(. != "")))
+            | unique | join(", ")' composer.json)
+
+          echo "require.php $(jq -r .constraint <<<"$info"): floor $floor, matrix $matrix, extensions [$extensions]"
+          {
+            echo "floor=$floor"
+            echo "newest=$newest"
+            echo "matrix=$matrix"
+            echo "extensions=$extensions"
+          } >> "$GITHUB_OUTPUT"
+
+      # Deeper package.json files (a types package published in Resources/Public,
+      # a workspace member) belong to the frontend above them.
+      - name: Read what the package contains
+        id: contents
+        run: |
+          set -euo pipefail
+          frontends=$(git ls-files -- ':(glob)package.json' ':(glob)Resources/Private/*/package.json' \
+            | xargs -r -n1 dirname | jq -Rnc '[inputs]')
+          {
+            echo "code=${{ hashFiles('Classes/**/*.php') != '' }}"
+            echo "functional=${{ hashFiles('Tests/Functional/**/*.php') != '' }}"
+            echo "frontends=$frontends"
+          } >> "$GITHUB_OUTPUT"
+          echo "PHP in Classes/: ${{ hashFiles('Classes/**/*.php') != '' }}; functional tests: ${{ hashFiles('Tests/Functional/**/*.php') != '' }}; frontends: $frontends"
+
+  # Once, on the floor with the newest dependencies: neither the coding standard
+  # nor the analysis varies by interpreter. No PHPStan baseline: every reported
+  # error is one to fix, not to record.
+  lint:
+    name: Lint (PHP ${{ needs.detect.outputs.floor }}, highest deps)
+    needs: detect
+    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-latest' }}
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # Flow's proxy building and PHPStan on a Neos install both outgrow PHP's
+      # default 128M.
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ needs.detect.outputs.floor }}
+          extensions: ${{ needs.detect.outputs.extensions }}
+          ini-values: memory_limit=-1
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+        with:
+          dependency-versions: highest
+          composer-options: "--prefer-dist"
+
+      # The parts of `composer lint`, one step each, so that each reports on its
+      # own line and the two that need code can wait for it. The manifest is the
+      # package's contract with every distribution that installs it, so it is
+      # checked whether or not the package ships PHP.
+      - name: Validate composer.json
+        run: composer lint:composer
+
+      # PHPStan and PHP_CodeSniffer refuse to run on zero files.
+      - name: Run PHP CodeSniffer
+        if: needs.detect.outputs.code == 'true'
+        run: composer lint:phpcs
+
+      - name: Run PHPStan
+        if: needs.detect.outputs.code == 'true'
+        run: composer lint:phpstan
+
+  # The range composer.json declares, proven at both ends: the floor with the
+  # oldest set Composer will install, every admitted PHP with the newest. No
+  # composer.lock is committed, which is what makes that split mean anything.
+  # The unit suite runs in every cell; before its first test it reports
+  # "No tests executed!" and passes.
+  test:
+    name: Test (PHP ${{ matrix.php }}, ${{ matrix.deps }} deps)
+    needs: detect
+    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-latest' }}
+    timeout-minutes: 20
+
+    strategy:
+      # Every version reports, rather than the first failure cancelling the rest.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: ${{ needs.detect.outputs.extensions }}
+          ini-values: memory_limit=-1
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+        with:
+          dependency-versions: ${{ matrix.deps }}
+          composer-options: "--prefer-dist"
+
+      # What the cell actually resolved, so the floor is auditable in the log
+      # rather than inferred from the job name.
+      - name: Show resolved dependency versions
+        run: composer show --direct
+
+      - name: Run Tests (PHPUnit)
+        run: composer test
+
+  # Tests that extend Flow's FunctionalTestCase need a whole Neos: the package is
+  # installed into Neos' base distribution, in the newest release its own
+  # neos/neos (or neos/flow) constraint admits, as a copy rather than a symlink
+  # so Flow finds it under Packages/ like any installed package. Newest Neos on
+  # the newest admitted PHP, the corner the test matrix's last cell also covers:
+  # the floor PHP may be older than the newest Neos supports.
+  functional:
+    # A fixed name: most packages skip this job, and a skipped job shows its
+    # name unexpanded. The PHP version is in the log's setup step.
+    name: Functional (newest PHP, highest deps)
+    needs: detect
+    if: needs.detect.outputs.functional == 'true'
+    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-latest' }}
+    timeout-minutes: 45
+
+    # The content repository needs MariaDB or MySQL; on another database its
+    # tests skip themselves and the job would pass without proving anything.
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_DATABASE: flow_functional
+          MARIADB_USER: flow
+          MARIADB_PASSWORD: flow
+          MARIADB_RANDOM_ROOT_PASSWORD: '1'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          path: package
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ needs.detect.outputs.newest }}
+          extensions: ${{ needs.detect.outputs.extensions }}
+          ini-values: memory_limit=-1
+          tools: composer:v2
+          coverage: none
+
+      - name: Prepare Neos distribution
+        run: |
+          set -euo pipefail
+          name=$(jq -r .name package/composer.json)
+          neos=$(jq -r '.require["neos/neos"] // .require["neos/flow"] // "*"' package/composer.json)
+          composer create-project --no-install --no-scripts --no-interaction neos/neos-base-distribution dist "$neos"
+          cd dist
+          composer config --no-plugins allow-plugins.neos/composer-plugin true
+          composer config repositories.package '{ "type": "path", "url": "../package", "options": { "symlink": false } }'
+          composer require --no-update --no-interaction "$name:@dev"
+          echo "PACKAGE_NAME=$name" >> "$GITHUB_ENV"
+
+      - name: Configure the database
+        run: |
+          mkdir -p dist/Configuration/Testing
+          cat > dist/Configuration/Testing/Settings.yaml <<'YAML'
+          Neos:
+            Flow:
+              persistence:
+                backendOptions:
+                  driver: pdo_mysql
+                  host: 127.0.0.1
+                  dbname: flow_functional
+                  user: flow
+                  password: flow
+                  charset: utf8mb4
+          YAML
+
+      - name: Install dependencies
+        working-directory: dist
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Show resolved dependency versions
+        working-directory: dist
+        run: composer show --direct
+
+      # A skipped test fails the job: a content repository test that skips has
+      # lost its database, and the run would otherwise pass without it.
+      - name: Run Tests (PHPUnit, functional)
+        working-directory: dist
+        env:
+          FLOW_CONTEXT: Testing
+        run: |
+          set -euo pipefail
+          path=$(composer show --path "$PACKAGE_NAME" | awk '{print $2}')
+          bin/phpunit -c Build/BuildEssentials/PhpUnit/FunctionalTests.xml --fail-on-skipped "$path/Tests/Functional"
+
+      - name: Show logs on failure
+        if: ${{ failure() }}
+        working-directory: dist
+        run: |
+          for file in Data/Logs/*.log Data/Logs/Exceptions/*; do
+            [ -f "$file" ] || continue
+            echo "::group::$file"
+            tail -n 200 "$file"
+            echo "::endgroup::"
+          done
+
+  # A frontend a package ships is committed prebuilt, so what installations run
+  # is what was committed, not what the sources say. Each frontend is linted and
+  # built, and the job fails when the build differs from the committed one, which
+  # also covers the type check a build runs. Each frontend provides `lint` and,
+  # if it builds anything, `build`; its .nvmrc and package-lock.json sit beside it.
+  frontend:
+    # No matrix expression in the name: GitHub appends the matrix value itself,
+    # and a skipped job would otherwise show the unexpanded expression.
+    name: Frontend
+    needs: detect
+    if: needs.detect.outputs.frontends != '[]'
+    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-latest' }}
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJSON(needs.detect.outputs.frontends) }}
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # .nvmrc is the one place the Node version is pinned; the build output
+      # depends on it.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ${{ matrix.dir }}/.nvmrc
+          cache: npm
+          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Linting
+        run: npm run lint
+
+      # A sidecar that runs its sources as they are has nothing to build.
+      - name: Build
+        run: npm run build --if-present
+
+      # Covers every layout without naming an output directory: a committed build
+      # must come out identical, a gitignored one leaves nothing to compare.
+      # Untracked files count too - a new hashed asset that was never committed is
+      # exactly the drift this guards against.
+      - name: Compare with the committed build
+        working-directory: .
+        run: |
+          git add --intent-to-add --all
+          git diff --exit-code --stat
