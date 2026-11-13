@@ -18,7 +18,7 @@
     },
     "require-dev": {
         "neos/contentgraph-doctrinedbaladapter": "^9.0",
-        "phpunit/phpunit": "^10.5 || ^11.5",
+        "phpunit/phpunit": "^10.5 || ^11.5 || ^13.0",
         "phpstan/phpstan": "^2.1",
         "squizlabs/php_codesniffer": "^4.0"
     },
