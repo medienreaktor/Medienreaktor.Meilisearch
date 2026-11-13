@@ -14,6 +14,11 @@ and above - are not part of the history below.
 
 ## [Unreleased]
 
+### Changed
+
+- Requires PHP 8.1. PHP 8.0 has been end of life since November 2023, and CI no
+  longer tests it.
+
 ## [2.13.0] - 2026-09-19
 
 ### Fixed
