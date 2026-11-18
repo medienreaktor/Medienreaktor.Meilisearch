@@ -119,7 +119,7 @@ final class WorkspaceIndexer {
      * well would only bloat the generated IN (...) — normally this comes down to
      * the single abstract Neos.Neos:Document.
      */
-    protected function fulltextRootNodeTypeCriteria(ContentRepository $contentRepository): NodeTypeCriteria {
+    public function fulltextRootNodeTypeCriteria(ContentRepository $contentRepository): NodeTypeCriteria {
         $cacheKey = $contentRepository->id->value;
         if (isset($this->fulltextRootCriteria[$cacheKey])) {
             return $this->fulltextRootCriteria[$cacheKey];

@@ -6,6 +6,8 @@ namespace Medienreaktor\Meilisearch\Command;
 use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Exception;
+use Medienreaktor\Meilisearch\Indexer\CatchUp\IndexCatchUpOutcome;
+use Medienreaktor\Meilisearch\Indexer\CatchUp\IndexCatchUpService;
 use Medienreaktor\Meilisearch\Indexer\WorkspaceIndexer;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\NodeType\NodeTypeName;
@@ -53,6 +55,33 @@ class NodeIndexCommandController extends CommandController {
     #[Inject]
     protected ContentRepositoryRegistry $contentRepositoryRegistry;
 
+
+    #[Inject]
+    protected IndexCatchUpService $indexCatchUpService;
+
+    /**
+     * Index what changed in live since the last run
+     *
+     * Reads the content repository's events after the stored position and reindexes the
+     * documents they touch. Meant for cron, every few minutes, next to the nightly
+     * nodeindex:rebuild. The first run only records the current position.
+     *
+     * @param int $batchSize Read at most this many events per run; the rest waits for the next run
+     * @param string $contentRepository Content repository id
+     * @return void
+     */
+    public function catchUpCommand(int $batchSize = 10000, string $contentRepository = 'default'): void {
+        $result = $this->indexCatchUpService->catchUp(ContentRepositoryId::fromString($contentRepository), $batchSize);
+
+        match ($result->outcome) {
+            IndexCatchUpOutcome::AlreadyRunning => $this->outputLine('Another catch-up is running, nothing done.'),
+            IndexCatchUpOutcome::Initialized => $this->outputLine('No position stored yet. Starting after event %d; nothing indexed.', [$result->to?->value]),
+            IndexCatchUpOutcome::CaughtUp => $this->outputLine(
+                'Events %d to %d: %d read, %d document(s) reindexed or removed.%s',
+                [$result->from?->value, $result->to?->value, $result->eventCount, $result->documentCount, $result->moreEventsPending ? ' More events pending.' : '']
+            ),
+        };
+    }
 
     public function createIndexCommand(): void {
         $this->indexClient->createIndex();

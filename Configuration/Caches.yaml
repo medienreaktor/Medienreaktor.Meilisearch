@@ -1,0 +1,6 @@
+# Position of the last content repository event nodeindex:catchup has handled. Persistent,
+# so neither a cache flush nor a deploy makes the catch-up forget where it stands.
+Medienreaktor_Meilisearch_CatchUpPosition:
+  frontend: Neos\Cache\Frontend\StringFrontend
+  backend: Neos\Cache\Backend\FileBackend
+  persistent: true

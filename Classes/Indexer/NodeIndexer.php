@@ -15,7 +15,9 @@ use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFil
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\ContentRepository\Core\Projection\ContentGraph\NodeAggregate;
 use Neos\ContentRepository\Core\Projection\ContentGraph\VisibilityConstraints;
+use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeName;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
@@ -24,6 +26,7 @@ use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Mvc\ActionRequest;
 use Neos\Neos\Domain\Model\SiteNodeName;
 use Neos\Neos\Domain\Repository\SiteRepository;
+use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
 use Neos\Neos\FrontendRouting\NodeUriBuilderFactory;
 use Neos\Neos\FrontendRouting\Options;
 use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
@@ -170,26 +173,61 @@ class NodeIndexer extends AbstractNodeIndexer {
         $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($dimensionCombination, VisibilityConstraints::createEmpty());
         $node = $subgraph->findNodeById($node->aggregateId);
 
+        return $node !== null ? $this->extractDocument($node) : null;
+    }
 
-        if ($node !== null) {
-            $identifier = $this->generateUniqueNodeIdentifier($node);
-            $fulltext = [];
+    /**
+     * @return array<string, mixed>
+     */
+    protected function extractDocument(Node $node): array {
+        $fulltext = [];
 
-            $document = $this->extractPropertiesAndFulltext($node, $fulltext);
-            $document['id'] = $identifier;
-            $document['__fulltext'] = $this->truncateFulltext($fulltext);
-            $document['title'] = $node->getProperty("title");
-            $document['__uri'] = $this->getNodeUri($node);
+        $document = $this->extractPropertiesAndFulltext($node, $fulltext);
+        $document['id'] = $this->generateUniqueNodeIdentifier($node);
+        $document['__fulltext'] = $this->truncateFulltext($fulltext);
+        $document['title'] = $node->getProperty("title");
+        $document['__uri'] = $this->getNodeUri($node);
 
-            if (array_key_exists('__geo', $document)) {
-                $document['_geo'] = $document['__geo'];
-                unset($document['__geo']);
-            }
-
-            return $document;
+        if (array_key_exists('__geo', $document)) {
+            $document['_geo'] = $document['__geo'];
+            unset($document['__geo']);
         }
 
-        return null;
+        return $document;
+    }
+
+    /**
+     * Replace every document of one fulltext root with its current live variants, seen the
+     * way nodeindex:build sees them: a removed variant, or one below a removed node, is
+     * left out. indexNode() reads without visibility constraints and would bring it back.
+     */
+    public function reindexFulltextRoot(ContentRepositoryId $contentRepositoryId, NodeAggregateId $nodeAggregateId): void {
+        $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
+        $contentGraph = $contentRepository->getContentGraph(WorkspaceName::forLive());
+
+        $documents = [];
+        foreach ($contentRepository->getVariationGraph()->getDimensionSpacePoints() as $dimensionSpacePoint) {
+            $node = $contentGraph->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved())->findNodeById($nodeAggregateId);
+            if ($node !== null) {
+                $documents[] = $this->extractDocument($node);
+            }
+        }
+
+        $this->removeFulltextRoot($nodeAggregateId);
+        if ($documents !== []) {
+            $this->indexClient->addDocuments($documents);
+        }
+    }
+
+    public function removeFulltextRoot(NodeAggregateId $nodeAggregateId): void {
+        $this->indexClient->deleteByFilter('__identifier = "' . $nodeAggregateId->value . '"');
+    }
+
+    /**
+     * The node itself if it is a fulltext root, otherwise its closest fulltext root ancestor.
+     */
+    public function fulltextRootOf(Node $node): ?Node {
+        return $this->findFulltextRoot($node);
     }
 
     /**

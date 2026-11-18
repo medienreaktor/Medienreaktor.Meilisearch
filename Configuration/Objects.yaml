@@ -29,3 +29,12 @@ Medienreaktor\Meilisearch\Search\MeilisearchQueryBuilder:
         arguments:
           1:
             value: neos
+Medienreaktor\Meilisearch\Indexer\CatchUp\IndexCatchUpService:
+  properties:
+    positionCache:
+      object:
+        factoryObjectName: Neos\Flow\Cache\CacheManager
+        factoryMethodName: getCache
+        arguments:
+          1:
+            value: Medienreaktor_Meilisearch_CatchUpPosition

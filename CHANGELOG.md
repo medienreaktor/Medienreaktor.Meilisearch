@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-11-18
+
+### Added
+
+- `nodeindex:catchup` indexes what changed in live since its last run, from cron
+  between nightly rebuilds. It reads the content repository's events after a stored
+  position, so publishing stays as fast as before. Without it, changes reached the
+  index only with the next `nodeindex:build` or `nodeindex:rebuild`. See "Keeping the
+  index up to date" in the README.
+
 ## [3.0.3] - 2026-11-10
 
 ### Fixed
@@ -72,7 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `search.fulltext.excludeChildren` on a node type skips its subtree when building
   the fulltext (released as the untracked tag 2.9.0).
 
-[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.3...HEAD
+[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.1.0...HEAD
+[3.1.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.3...3.1.0
 [3.0.3]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.2...3.0.3
 [3.0.2]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.1...3.0.2
 [3.0.1]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.0...3.0.1

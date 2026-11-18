@@ -109,6 +109,32 @@ with an exception when the index settings are applied (`nodeindex:createindex`,
 `nodeindex:rebuild`) rather than merged wrongly. Do not switch off the attributes
 above, as they are needed for base functionality to work. After finishing or changing configuration, build the node index once via the CLI command `flow nodeindex:build`.
 
+### Keeping the index up to date
+
+Neos 9 does not update the index when content is published: the real-time hook of
+Neos.ContentRepository.Search is experimental and has to be registered by hand, and
+its README warns against it because it slows down every publish. This package keeps
+the index current from cron instead:
+
+```
+*/5 * * * * cd /path/to/neos && ./flow nodeindex:catchup
+0 3 * * *   cd /path/to/neos && ./flow nodeindex:rebuild
+```
+
+`nodeindex:catchup` reads the content repository's events after the position it
+handled last and replaces the documents they touch in the live workspace. Hidden or
+removed pages behave as in `nodeindex:build`: removed ones leave the index, a tag,
+untag or move reaches every document below. The position is kept per content
+repository in the persistent cache `Medienreaktor_Meilisearch_CatchUpPosition`; it
+only moves on after a batch is indexed, so a failed run is retried by the next. The
+first run, or one after that cache was lost, only records the current position, as
+the next rebuild covers everything before. Runs lock against each other.
+`--batch-size` caps the events read per run (default 10000).
+
+Two gaps are left to the nightly rebuild: a content node removed for good (not
+soft-removed by tag, as the Neos UI does) can no longer be traced to its document,
+and changes published while `nodeindex:rebuild` runs can be overwritten by its swap.
+
 ### Rebuilding without downtime
 
 `flow nodeindex:build` writes into the live index, so while it runs the index is
