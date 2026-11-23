@@ -41,14 +41,6 @@
     _hidden:
       search:
         indexing: '${Neos.Node.isDisabled(node)}'
-'Neos.Neos:Timable':
-  properties:
-    _hiddenBeforeDateTime:
-      search:
-        indexing: "${(node.hiddenBeforeDateTime ? Date.format(node.hiddenBeforeDateTime, 'U') : null)}"
-    _hiddenAfterDateTime:
-      search:
-        indexing: "${(node.hiddenAfterDateTime ? Date.format(node.hiddenAfterDateTime, 'U') : null)}"
 'Neos.Neos:Document':
   search:
     fulltext:

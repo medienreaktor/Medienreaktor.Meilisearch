@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **No stray `Neos.Neos:Timable` node type.** The package configured the Neos 8
+  mixin, which Neos 9 does not have, and so created a node type of that name.
+
 - `AssetUri.build()` indexes stable proxy URIs (`/search/thumbnail/<asset id>?width=…`)
   served by the new `ThumbnailController`, which creates the thumbnail on request and
   redirects to it. The indexed URIs pointed at a thumbnail entity or a resource, and
