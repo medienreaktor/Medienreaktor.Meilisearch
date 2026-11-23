@@ -17,6 +17,7 @@ Neos:
     defaultContext:
       IndexPath: Medienreaktor\Meilisearch\Eel\IndexPathHelper
       Dimensions: Medienreaktor\Meilisearch\Eel\DimensionsHelper
+      Meilisearch: Medienreaktor\Meilisearch\Eel\MeilisearchHelper
 Medienreaktor:
   Meilisearch:
     # Set to false to leave __fulltext out of the documents, e.g. when documents are
@@ -44,6 +45,12 @@ Medienreaktor:
     client:
       endpoint: 'http://meilisearch:7700'
       apiKey: '1234'
+      # Search key and its uid the Meilisearch.tenantToken() Eel helper signs tokens with
+      readonlyApiKey: ''
+      readonlyApiKeyUid: ''
+    tenantToken:
+      # Lifetime in seconds; 0 creates tokens without expiry, safe in cached output
+      expiresIn: 0
     settings:
       displayedAttributes:
         - '*'

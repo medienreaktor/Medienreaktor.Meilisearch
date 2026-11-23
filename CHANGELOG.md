@@ -67,6 +67,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The `Meilisearch` Eel helper for frontend tenant tokens
+  (`Meilisearch.tenantToken()`, `searchRules()`, `frontendFilter()`) with the settings
+  `client.readonlyApiKey`, `client.readonlyApiKeyUid` and `tenantToken.expiresIn`
+  (0, the default, for tokens without expiry), as on the Neos 8 line. On Neos 9 the
+  dimensions argument is a dimension space point or its coordinates instead of
+  `site.context.dimensions`; `[]` uses the site node's own.
 - The `Dimensions` Eel helper (`Dimensions.hash(dimensions)`,
   `Dimensions.hashByNode(node)`) and `DimensionsService`, as on the Neos 8 line. On
   Neos 9 the hash is the dimension space point's own hash, which `__dimensionsHash`
