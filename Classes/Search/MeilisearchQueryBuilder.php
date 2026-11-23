@@ -283,7 +283,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
 
     /**
      * Execute the query and return the raw hits, each enriched with its resolved
-     * node under `__node` where one could be resolved.
+     * node under `__node`. Asset documents are returned without one; hits whose node
+     * is not visible in the context are left out.
      *
      * @return \Traversable<int, array<string, mixed>>
      */
@@ -292,6 +293,11 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
         $results = $this->indexClient->search($this->query, $this->parameters);
         $hits = [];
         foreach ($results->getHits() as $hit) {
+            if (self::isAssetHit($hit)) {
+                $hits[(string)($hit['__uri'] ?? $hit['id'] ?? count($hits))] = $hit;
+                continue;
+            }
+
             $node = $this->resolveNode($hit);
             if ($node instanceof Node) {
                 $hit['__node'] = $node;
@@ -299,6 +305,37 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
             }
         }
         return (new \ArrayObject(array_values($hits)))->getIterator();
+    }
+
+    /**
+     * Execute the query and return the raw hits, without resolving any nodes.
+     *
+     * @return \Traversable<int, array<string, mixed>>
+     */
+    public function executeWithoutProcessing(): \Traversable
+    {
+        $results = $this->indexClient->search($this->query, $this->parameters);
+
+        $hits = [];
+        foreach ($results->getHits() as $hit) {
+            $hits[(string)($hit['id'] ?? count($hits))] = $hit;
+        }
+
+        return (new \ArrayObject(array_values($hits)))->getIterator();
+    }
+
+    /**
+     * Documents that other indexers (e.g. an asset indexer) write into the same index
+     * stand for no node. They are returned as they are, without `__node`.
+     *
+     * @param array<string, mixed> $hit
+     */
+    protected static function isAssetHit(array $hit): bool
+    {
+        if (($hit['__isAsset'] ?? false) === true) {
+            return true;
+        }
+        return !isset($hit['__aggregateId']) && is_string($hit['__path'] ?? null) && str_contains($hit['__path'], 'assets');
     }
 
     /**

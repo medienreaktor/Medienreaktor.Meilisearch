@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `executeWithoutProcessing()` returns the raw hits without resolving nodes, and
+  `executeRaw()` returns asset documents written into the same index (`__isAsset`, or
+  an `__path` containing `assets`) instead of failing on their missing
+  `__aggregateId`. Both as on the Neos 8 line.
 - `distinct(attribute)` on the query builder, as on the Neos 8 line.
 - `hybrid(searchTerm, {embedder, semanticRatio})` on the query builder combines
   keyword and vector search (Meilisearch 1.6 or newer with an embedder).

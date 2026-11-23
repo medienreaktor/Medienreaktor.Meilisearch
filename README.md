@@ -264,7 +264,8 @@ The search query builder supports the following features:
 | `geoRadius(lat, lng, distance)`              | Filters by geo radius |
 | `geoPoint(lat, lng)`                         | Sort by geo point |
 | `execute()`                                  | Execute the query and return resulting nodes |
-| `executeRaw()`                               | Execute the query and return raw Meilisearch result data, enriched with node data |
+| `executeRaw()`                               | Execute the query and return raw Meilisearch result data, enriched with node data in `__node`; asset documents come without a node |
+| `executeWithoutProcessing()`                 | Execute the query and return raw Meilisearch result data without resolving any nodes |
 
 ## ⚡ Usage with JavaScript / React / Vue
 
