@@ -274,21 +274,28 @@ Please mind these three things:
 
 Setup your filter to always include the following filter string:
 `(__parentPath = "$nodePath" OR __path = "$nodePath") AND __dimensionsHash = "$dimensionsHash"`
-where `$nodePath` is the NodePath of your context node (e.g. site) and `$dimensionHash` is the MD5-hashed JSON-encoded context dimensions array.
+where `$nodePath` is the index path of your context node (e.g. site) and `$dimensionsHash` is the hash of its dimension space point.
+
+Neos 9 nodes have no path of names, so `__path` is built from node aggregate ids, from
+the content repository root down to the node itself (`/<rootId>/<siteId>/<pageId>`).
+`__parentPath` lists the paths of all ancestors, the direct parent included, so
+`__parentPath = "$nodePath"` matches every node below the context node.
 
 You can obtain these values in PHP using:
 
 ```php
-$nodePath = (string) $contextNode->findNodePath();
-$dimensionsHash = md5(json_encode($contextNode->getContext()->getDimensions()));
+$nodePath = $this->indexPathService->pathOf($contextNode); // Medienreaktor\Meilisearch\Domain\Service\IndexPathService
+$dimensionsHash = $contextNode->dimensionSpacePoint->hash;
 ```
 
 In Fusion, you get these values (assuming `site` is your desired context node) using:
 
 ```
-nodePath = ${site.path}
-dimensionsHash = ${String.md5(Json.stringify(site.context.dimensions))}
+nodePath = ${IndexPath.of(site)}
+dimensionsHash = ${site.dimensionSpacePoint.hash}
 ```
+
+`IndexPath.parents(node)` returns the node's `__parentPath` values.
 
 ### 2. The node URI
 

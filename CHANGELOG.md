@@ -24,11 +24,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING: `__path` and `__parentPath` mean what they meant on the Neos 8 line.**
+  `__path` is the node's own aggregate-id path, `/<rootId>/<siteId>/…/<nodeId>`, and
+  `__parentPath` holds the path of every ancestor, the direct parent included. Both
+  were one level short: `__path` was the parent's path, so a hit's `__path` did not
+  address its node and `__parentPath = "<path of X>"` missed X's direct children.
+  `Search.query(node)` keeps its results. Run `nodeindex:rebuild` after upgrading;
+  until then `query()` misses the direct children of the context node.
+- `execute()` resolves hits by node aggregate id; it looked them up as node name
+  paths, which aggregate-id paths are not, and so returned nothing.
 - `NodeLinkService::getNodeUri()` returns the URI as a string, as on the Neos 8 line,
   instead of a `UriInterface`; `__uri` holds the same value as before.
 
 ### Added
 
+- The `IndexPath` Eel helper, in Fusion and in indexing expressions:
+  `IndexPath.of(node)` is the node's `__path`, `IndexPath.parents(node)` its
+  `__parentPath`. In PHP, `IndexPathService::pathOf()` and `parentPathsOf()`. Use them
+  to build filters for a context node outside the query builder.
 - `nodeindex:deleteindex` deletes the index itself, settings included, as on the
   Neos 8 line; `nodeindex:flush` still only removes the documents.
 - `search()` and `deleteIndex()` are declared on `IndexInterface`. The query builder

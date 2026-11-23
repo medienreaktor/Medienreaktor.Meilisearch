@@ -5,12 +5,9 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Search;
 
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
-use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindAncestorNodesFilter;
+use Medienreaktor\Meilisearch\Domain\Service\IndexPathService;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
-use Neos\ContentRepository\Core\Projection\ContentGraph\NodePath;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
-use Neos\ContentRepository\Search\Dto\NodeAggregateIdPath;
-use Neos\ContentRepository\Search\Eel\IndexingHelper;
 use Neos\ContentRepository\Search\Search\QueryBuilderInterface;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Eel\ProtectedContextAwareInterface;
@@ -32,6 +29,9 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @var ContentRepositoryRegistry
      */
     protected $contentRepositoryRegistry;
+
+    #[Flow\Inject]
+    protected IndexPathService $indexPathService;
 
     /**
      * The node inside which searching should happen
@@ -240,10 +240,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
 
         $nodes = [];
         foreach ($results->getHits() as $hit) {
-            $nodePath = $hit['__path'];
-            $subgraph = $this->contentRepositoryRegistry->subgraphForNode($this->contextNode);
-            $nodePath = NodePath::fromString($nodePath);
-            $node = $subgraph->findNodeByPath($nodePath, $this->contextNode->aggregateId);
+            $node = $this->resolveNode($hit);
             if ($node instanceof Node) {
                 $nodes[$node->aggregateId->value] = $node;
             }
@@ -261,17 +258,43 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     {
         $results = $this->indexClient->search($this->query, $this->parameters);
         $hits = [];
-        $subgraph = $this->contentRepositoryRegistry->subgraphForNode($this->contextNode);
         foreach ($results->getHits() as $hit) {
-            $aggregateId = $hit['__aggregateId'];
-            $aggregateId = NodeAggregateId::fromString($aggregateId);
-            $node = $subgraph->findNodeById($aggregateId);
+            $node = $this->resolveNode($hit);
             if ($node instanceof Node) {
                 $hit['__node'] = $node;
                 $hits[$node->aggregateId->value] = $hit;
             }
         }
         return (new \ArrayObject(array_values($hits)))->getIterator();
+    }
+
+    /**
+     * The node a hit stands for, read in the context node's subgraph, or null when the
+     * hit is no node document or its node is not visible there.
+     *
+     * Resolved by aggregate id: `__aggregateId`, or the last segment of `__path` for
+     * documents indexed before that attribute existed.
+     *
+     * @param array<string, mixed> $hit
+     */
+    protected function resolveNode(array $hit): ?Node
+    {
+        $aggregateId = $hit['__aggregateId'] ?? null;
+        if (!is_string($aggregateId) || $aggregateId === '') {
+            $path = $hit['__path'] ?? null;
+            if (!is_string($path) || $path === '') {
+                return null;
+            }
+            $aggregateId = basename($path);
+        }
+
+        try {
+            $nodeAggregateId = NodeAggregateId::fromString($aggregateId);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+
+        return $this->contentRepositoryRegistry->subgraphForNode($this->contextNode)->findNodeById($nodeAggregateId);
     }
 
     /**
@@ -333,18 +356,9 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
         $this->contextNode = $contextNode;
 
         $dimensionsHash = md5($contextNode->dimensionSpacePoint->toJson());
-        $subgraph = $this->contentRepositoryRegistry->subgraphForNode($contextNode);
-
-        $ancestors = $subgraph->findAncestorNodes(
-            $contextNode->aggregateId,
-            FindAncestorNodesFilter::create()
-        )->reverse();
-
-        // The indexed __path of a node lists its ancestors only, not the node itself. The
-        // context node therefore has to be part of the path, or the query would match the
-        // descendants of its parent, i.e. its siblings' subtrees as well.
-        $nodeAggregateIdPath = NodeAggregateIdPath::fromNodes($ancestors->append($contextNode));
-        $this->parameters['filter'][] = '(__parentPath = "' . $nodeAggregateIdPath->serializeToString() . '" OR __path = "' . $nodeAggregateIdPath->serializeToString() . '")';
+        // The context node itself, or any node below it
+        $contextPath = $this->indexPathService->pathOf($contextNode);
+        $this->parameters['filter'][] = '(__parentPath = "' . $contextPath . '" OR __path = "' . $contextPath . '")';
         $this->parameters['filter'][] = '__dimensionsHash = "' . $dimensionsHash . '"';
 
         return $this;

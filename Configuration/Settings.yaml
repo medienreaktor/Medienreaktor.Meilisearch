@@ -11,6 +11,10 @@ Neos:
       defaultContext:
         Json: Neos\Eel\Helper\JsonHelper
         AssetUri: Medienreaktor\Meilisearch\Eel\AssetUriHelper
+        IndexPath: Medienreaktor\Meilisearch\Eel\IndexPathHelper
+  Fusion:
+    defaultContext:
+      IndexPath: Medienreaktor\Meilisearch\Eel\IndexPathHelper
 Medienreaktor:
   Meilisearch:
     indexing:
