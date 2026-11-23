@@ -7,6 +7,7 @@ namespace Medienreaktor\Meilisearch\Domain\Service;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
 use Neos\Flow\Annotations as Flow;
+use Psr\Http\Message\UriInterface;
 use Neos\Flow\Mvc\Exception\NoMatchingRouteException;
 use Neos\Neos\FrontendRouting\NodeUriBuilderFactory;
 use Neos\Neos\FrontendRouting\Options;
@@ -39,10 +40,10 @@ class NodeLinkService
      * without a URI.
      *
      * @param Node $node
-     * @return string|null Null for a node that is not below a site
+     * @return UriInterface|null Null for a node that is not below a site
      * @throws NoMatchingRouteException
      */
-    public function getNodeUri(Node $node): ?string
+    public function getNodeUri(Node $node): ?UriInterface
     {
         if ($this->getSiteNodeFromNode($node) === null) {
             return null;
@@ -54,7 +55,7 @@ class NodeLinkService
 
         $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest($this->requestService->createActionRequest($node));
 
-        return (string)$nodeUriBuilder->uriFor(NodeAddress::fromNode($node), $options);
+        return $nodeUriBuilder->uriFor(NodeAddress::fromNode($node), $options);
     }
 
     /**

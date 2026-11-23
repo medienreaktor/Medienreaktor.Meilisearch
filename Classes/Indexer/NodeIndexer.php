@@ -18,6 +18,7 @@ use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
 use Neos\ContentRepository\Search\Indexer\BulkNodeIndexerInterface;
 use Neos\Flow\Annotations as Flow;
+use Psr\Http\Message\UriInterface;
 use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
 
 /**
@@ -247,7 +248,8 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
             $document['__fulltext'] = $this->truncateFulltext($fulltext);
         }
         $document['title'] = $node->getProperty("title");
-        $document['__uri'] = $this->getNodeUri($node);
+        $uri = $this->getNodeUri($node);
+        $document['__uri'] = $uri === null ? null : (string)$uri;
 
         if (array_key_exists('__geo', $document)) {
             $document['_geo'] = $document['__geo'];
@@ -550,9 +552,9 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
      * root (e.g. FAQ entries), which have no route of their own.
      *
      * @param Node $node
-     * @return string|null
+     * @return UriInterface|null
      */
-    protected function getNodeUri(Node $node): ?string
+    protected function getNodeUri(Node $node): ?UriInterface
     {
         if (!$this->isDocument($node)) {
             return null;

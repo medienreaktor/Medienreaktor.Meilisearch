@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Tests\Unit\Fixtures;
 
+use Psr\Http\Message\UriInterface;
 use Medienreaktor\Meilisearch\Domain\Service\NodeLinkService;
 use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Neos\ContentRepository\Core\NodeType\NodeType;
@@ -27,7 +28,7 @@ final class NodeIndexerWithNodeTypes extends NodeIndexer
         $this->nodeLinkService = $nodeLinkService;
     }
 
-    public function getNodeUri(Node $node): ?string
+    public function getNodeUri(Node $node): ?UriInterface
     {
         return parent::getNodeUri($node);
     }
