@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   address its node and `__parentPath = "<path of X>"` missed X's direct children.
   `Search.query(node)` keeps its results. Run `nodeindex:rebuild` after upgrading;
   until then `query()` misses the direct children of the context node.
+- **BREAKING: `vector()` takes a search term and options, as on the Neos 8 line.**
+  `vector(searchTerm, {embedder, semanticRatio})` searches through a Meilisearch
+  embedder configured in `settings.embedders`; `vector(array $vector)` with
+  precomputed vectors is gone, as is Meilisearch's experimental `vector` search
+  parameter it set.
 - `execute()` resolves hits by node aggregate id; it looked them up as node name
   paths, which aggregate-id paths are not, and so returned nothing.
 - `NodeLinkService::getNodeUri()` returns the URI as a string, as on the Neos 8 line,
@@ -38,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `hybrid(searchTerm, {embedder, semanticRatio})` on the query builder combines
+  keyword and vector search (Meilisearch 1.6 or newer with an embedder).
 - The `IndexPath` Eel helper, in Fusion and in indexing expressions:
   `IndexPath.of(node)` is the node's `__path`, `IndexPath.parents(node)` its
   `__parentPath`. In PHP, `IndexPathService::pathOf()` and `parentPathsOf()`. Use them

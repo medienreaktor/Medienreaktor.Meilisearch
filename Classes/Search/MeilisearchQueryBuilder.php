@@ -175,15 +175,34 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * Query the search index using vectors
+     * Combine keyword and vector search.
      *
-     * @param array $vector
+     * Needs an embedder configured in `Medienreaktor.Meilisearch.settings.embedders`.
+     *
+     * @param string $searchWord
+     * @param array{embedder?: string, semanticRatio?: float} $options `embedder` defaults to "default", `semanticRatio` to 0.5
      * @return QueryBuilderInterface
      */
-    public function vector(array $vector): QueryBuilderInterface
+    public function hybrid(string $searchWord, array $options = []): QueryBuilderInterface
     {
-        $this->parameters['vector'] = $vector;
+        $this->query = $searchWord;
+        $this->parameters['hybrid'] = [
+            'embedder' => $options['embedder'] ?? 'default',
+            'semanticRatio' => $options['semanticRatio'] ?? 0.5,
+        ];
         return $this;
+    }
+
+    /**
+     * Search by vector only, through the configured embedder.
+     *
+     * @param string $searchWord
+     * @param array{embedder?: string, semanticRatio?: float} $options `embedder` defaults to "default", `semanticRatio` to 1.0
+     * @return QueryBuilderInterface
+     */
+    public function vector(string $searchWord, array $options = []): QueryBuilderInterface
+    {
+        return $this->hybrid($searchWord, ['semanticRatio' => 1.0] + $options);
     }
 
     /**
