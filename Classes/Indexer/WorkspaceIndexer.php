@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Indexer;
@@ -34,7 +35,8 @@ use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
  *
  * @Flow\Scope("singleton")
  */
-final class WorkspaceIndexer {
+final class WorkspaceIndexer
+{
     /**
      * @var NodeIndexingManager
      * @Flow\Inject
@@ -66,7 +68,8 @@ final class WorkspaceIndexer {
      * @param callable $callback
      * @return integer
      */
-    public function index(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int {
+    public function index(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int
+    {
         $count = 0;
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $dimensionSpacePoints = $contentRepository->getVariationGraph()->getDimensionSpacePoints();
@@ -87,7 +90,8 @@ final class WorkspaceIndexer {
      * sites root plus the sites root itself, per dimension. Cheap SQL COUNT, no
      * nodes are materialised — used to give the build a determinate progress bar.
      */
-    public function count(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName): int {
+    public function count(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName): int
+    {
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $dimensionSpacePoints = $contentRepository->getVariationGraph()->getDimensionSpacePoints();
         $dimensionSpacePoints = $dimensionSpacePoints->isEmpty()
@@ -119,7 +123,8 @@ final class WorkspaceIndexer {
      * well would only bloat the generated IN (...) — normally this comes down to
      * the single abstract Neos.Neos:Document.
      */
-    public function fulltextRootNodeTypeCriteria(ContentRepository $contentRepository): NodeTypeCriteria {
+    public function fulltextRootNodeTypeCriteria(ContentRepository $contentRepository): NodeTypeCriteria
+    {
         $cacheKey = $contentRepository->id->value;
         if (isset($this->fulltextRootCriteria[$cacheKey])) {
             return $this->fulltextRootCriteria[$cacheKey];
@@ -189,7 +194,8 @@ final class WorkspaceIndexer {
      * @param callable $callback
      * @return int
      */
-    public function indexWithDimensions(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint, ?int $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int {
+    public function indexWithDimensions(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint, ?int $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int
+    {
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $contentGraph = $contentRepository->getContentGraph($workspaceName);
 
@@ -205,10 +211,11 @@ final class WorkspaceIndexer {
             $singleCallback($workspaceName, $indexedNodes, $dimensionSpacePoint);
         }
 
-        foreach ($subgraph->findDescendantNodes(
+        $descendantNodes = $subgraph->findDescendantNodes(
             $rootNode->aggregateId,
-            FindDescendantNodesFilter::create(nodeTypes: $this->fulltextRootNodeTypeCriteria($contentRepository)))
-                 as $descendantNode) {
+            FindDescendantNodesFilter::create(nodeTypes: $this->fulltextRootNodeTypeCriteria($contentRepository))
+        );
+        foreach ($descendantNodes as $descendantNode) {
             // $indexedNodes already counts the sites root, so this caps the visited
             // nodes at exactly $limit per dimension — which is what the progress
             // bar's maximum is calculated from.
@@ -221,7 +228,6 @@ final class WorkspaceIndexer {
             if ($singleCallback !== null) {
                 $singleCallback($workspaceName, $indexedNodes, $dimensionSpacePoint);
             }
-
         };
 
         $this->nodeIndexer->flush($targetIndexName);

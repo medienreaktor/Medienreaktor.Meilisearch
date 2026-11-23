@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Domain\Service;
@@ -27,7 +28,8 @@ use Psr\Http\Message\UriFactoryInterface;
  *
  * @Flow\Scope("singleton")
  */
-class RequestService {
+class RequestService
+{
     /**
      * @Flow\Inject
      * @var UriFactoryInterface
@@ -54,7 +56,8 @@ class RequestService {
      * @param Node $node
      * @return string
      */
-    public function getDomain(Node $node): string {
+    public function getDomain(Node $node): string
+    {
         try {
             $subgraph = $this->contentRepositoryRegistry->subgraphForNode($node);
             $siteNode = $subgraph->findClosestNode($node->aggregateId, FindClosestNodeFilter::create(nodeTypes: NodeTypeNameFactory::NAME_SITE));
@@ -69,9 +72,7 @@ class RequestService {
                     return 'https://' . $uri;
                 }
             }
-
         } catch (\Exception $e) {
-
         }
 
         return '';
@@ -83,7 +84,8 @@ class RequestService {
      * @param string|Node|null $value
      * @return ActionRequest
      */
-    public function createActionRequest(string|Node $value = null): ActionRequest {
+    public function createActionRequest(string|Node $value = null): ActionRequest
+    {
         $domain = null;
         if (is_string($value)) {
             $domain = $value;

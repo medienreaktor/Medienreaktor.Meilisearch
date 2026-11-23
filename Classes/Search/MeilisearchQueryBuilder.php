@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Search;
@@ -18,7 +19,8 @@ use Neos\Flow\Annotations as Flow;
 /**
  * Meilisearch Query Builder for Content Repository searches
  */
-class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContextAwareInterface {
+class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContextAwareInterface
+{
     /**
      * @Flow\Inject
      * @var IndexInterface
@@ -54,7 +56,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param string $propertyName the property name to sort by
      * @return QueryBuilderInterface
      */
-    public function sortDesc(string $propertyName): QueryBuilderInterface {
+    public function sortDesc(string $propertyName): QueryBuilderInterface
+    {
         $this->parameters['sort'][] = $propertyName . ':desc';
         return $this;
     }
@@ -65,7 +68,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param string $propertyName the property name to sort by
      * @return QueryBuilderInterface
      */
-    public function sortAsc(string $propertyName): QueryBuilderInterface {
+    public function sortAsc(string $propertyName): QueryBuilderInterface
+    {
         $this->parameters['sort'][] = $propertyName . ':asc';
         return $this;
     }
@@ -76,7 +80,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param int $limit
      * @return QueryBuilderInterface
      */
-    public function limit($limit): QueryBuilderInterface {
+    public function limit($limit): QueryBuilderInterface
+    {
         $this->parameters['limit'] = $limit;
         return $this;
     }
@@ -87,7 +92,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param int $from
      * @return QueryBuilderInterface
      */
-    public function from($from): QueryBuilderInterface {
+    public function from($from): QueryBuilderInterface
+    {
         $this->parameters['offset'] = $from;
         return $this;
     }
@@ -98,7 +104,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param int $page
      * @return QueryBuilderInterface
      */
-    public function page($page): QueryBuilderInterface {
+    public function page($page): QueryBuilderInterface
+    {
         $this->parameters['page'] = $page;
         return $this;
     }
@@ -109,7 +116,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param int $hitsPerPage
      * @return QueryBuilderInterface
      */
-    public function hitsPerPage($hitsPerPage): QueryBuilderInterface {
+    public function hitsPerPage($hitsPerPage): QueryBuilderInterface
+    {
         $this->parameters['hitsPerPage'] = $hitsPerPage;
         return $this;
     }
@@ -120,7 +128,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param string $filterString
      * @return QueryBuilderInterface
      */
-    public function filter(string $filterString): QueryBuilderInterface {
+    public function filter(string $filterString): QueryBuilderInterface
+    {
         $this->parameters['filter'][] = $filterString;
         return $this;
     }
@@ -132,7 +141,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param mixed $propertyValue
      * @return QueryBuilderInterface
      */
-    public function exactMatch(string $propertyName, $propertyValue): QueryBuilderInterface {
+    public function exactMatch(string $propertyName, $propertyValue): QueryBuilderInterface
+    {
         $this->parameters['filter'][] = $propertyName . ' = "' . $propertyValue . '"';
         return $this;
     }
@@ -143,7 +153,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param array $propertyNameValuePairs
      * @return QueryBuilderInterface
      */
-    public function exactMatchMultiple(array $propertyNameValuePairs): QueryBuilderInterface {
+    public function exactMatchMultiple(array $propertyNameValuePairs): QueryBuilderInterface
+    {
         foreach ($propertyNameValuePairs as $propertyName => $propertyValue) {
             $this->parameters['filter'][] = $propertyName . ' = "' . $propertyValue . '"';
         }
@@ -157,7 +168,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param array $options
      * @return QueryBuilderInterface
      */
-    public function fulltext(string $searchWord, array $options = []): QueryBuilderInterface {
+    public function fulltext(string $searchWord, array $options = []): QueryBuilderInterface
+    {
         $this->query = $searchWord;
         return $this;
     }
@@ -168,7 +180,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param array $vector
      * @return QueryBuilderInterface
      */
-    public function vector(array $vector): QueryBuilderInterface {
+    public function vector(array $vector): QueryBuilderInterface
+    {
         $this->parameters['vector'] = $vector;
         return $this;
     }
@@ -180,7 +193,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param array $highlightTags
      * @return QueryBuilderInterface
      */
-    public function highlight(array $attributes, array $highlightTags = ['<em>', '</em>']): QueryBuilderInterface {
+    public function highlight(array $attributes, array $highlightTags = ['<em>', '</em>']): QueryBuilderInterface
+    {
         $this->parameters['attributesToCrop'] = $attributes;
         $this->parameters['attributesToHighlight'] = $attributes;
         $this->parameters['cropLength'] = 20;
@@ -196,7 +210,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param string $cropMarker
      * @return QueryBuilderInterface
      */
-    public function crop($cropLength, string $cropMarker = '…'): QueryBuilderInterface {
+    public function crop($cropLength, string $cropMarker = '…'): QueryBuilderInterface
+    {
         $this->parameters['cropLength'] = $cropLength;
         $this->parameters['cropMarker'] = $cropMarker;
         return $this;
@@ -208,7 +223,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param string $matchingStrategy
      * @return QueryBuilderInterface
      */
-    public function matchingStrategy(string $matchingStrategy): QueryBuilderInterface {
+    public function matchingStrategy(string $matchingStrategy): QueryBuilderInterface
+    {
         $this->parameters['matchingStrategy'] = $matchingStrategy;
         return $this;
     }
@@ -218,7 +234,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      *
      * @return \Traversable<Node>
      */
-    public function execute(): \Traversable {
+    public function execute(): \Traversable
+    {
         $results = $this->indexClient->search($this->query, $this->parameters);
 
         $nodes = [];
@@ -239,7 +256,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      *
      * @return \Traversable<Node>
      */
-    public function executeRaw(): \Traversable {
+    public function executeRaw(): \Traversable
+    {
         $results = $this->indexClient->search($this->query, $this->parameters);
         $hits = [];
         $subgraph = $this->contentRepositoryRegistry->subgraphForNode($this->contextNode);
@@ -260,7 +278,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      *
      * @return int
      */
-    public function count(): int {
+    public function count(): int
+    {
         $results = $this->indexClient->search($this->query, $this->parameters);
         return $results->getEstimatedTotalHits();
     }
@@ -270,7 +289,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      *
      * @return int
      */
-    public function totalPages(): int {
+    public function totalPages(): int
+    {
         $results = $this->indexClient->search($this->query, $this->parameters);
         return $results->getTotalPages();
     }
@@ -280,7 +300,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      *
      * @return int
      */
-    public function totalHits(): int {
+    public function totalHits(): int
+    {
         $results = $this->indexClient->search($this->query, $this->parameters);
         return $results->getTotalHits();
     }
@@ -291,7 +312,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param array $facets
      * @return array
      */
-    public function facets(array $facets): array {
+    public function facets(array $facets): array
+    {
         $this->parameters['facets'] = $facets;
 
         $results = $this->indexClient->search($this->query, $this->parameters);
@@ -305,7 +327,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param Node $contextNode
      * @return QueryBuilderInterface
      */
-    public function query(Node $contextNode): QueryBuilderInterface {
+    public function query(Node $contextNode): QueryBuilderInterface
+    {
         $this->contextNode = $contextNode;
 
         $dimensionsHash = md5($contextNode->dimensionSpacePoint->toJson());
@@ -332,7 +355,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param string $nodeType the node type to filter for
      * @return QueryBuilderInterface
      */
-    public function nodeType(string $nodeType): QueryBuilderInterface {
+    public function nodeType(string $nodeType): QueryBuilderInterface
+    {
         $this->parameters['filter'][] = '__nodeTypeAndSupertypes = "' . $nodeType . '"';
         return $this;
     }
@@ -345,7 +369,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param string $distance distance in meters
      * @return QueryBuilderInterface
      */
-    public function geoRadius(string $lat, string $lng, string $distance): QueryBuilderInterface {
+    public function geoRadius(string $lat, string $lng, string $distance): QueryBuilderInterface
+    {
         $this->parameters['filter'][] = '_geoRadius(' . $lat . ', ' . $lng . ', ' . $distance . ')';
         return $this;
     }
@@ -357,7 +382,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param string $lng longitude
      * @return QueryBuilderInterface
      */
-    public function geoPoint(string $lat, string $lng): QueryBuilderInterface {
+    public function geoPoint(string $lat, string $lng): QueryBuilderInterface
+    {
         $this->parameters['sort'][] = '_geoPoint(' . $lat . ', ' . $lng . '):asc';
         return $this;
     }
@@ -366,7 +392,8 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * @param string $methodName
      * @return boolean
      */
-    public function allowsCallOfMethod($methodName) {
+    public function allowsCallOfMethod($methodName)
+    {
         return true;
     }
 }

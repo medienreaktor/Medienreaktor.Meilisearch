@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Command;
@@ -29,7 +30,8 @@ use Ramsey\Uuid\Exception\NodeException;
  *
  * @Flow\Scope("singleton")
  */
-class NodeIndexCommandController extends CommandController {
+class NodeIndexCommandController extends CommandController
+{
     /**
      * @Flow\Inject
      * @var NodeIndexer
@@ -70,7 +72,8 @@ class NodeIndexCommandController extends CommandController {
      * @param string $contentRepository Content repository id
      * @return void
      */
-    public function catchUpCommand(int $batchSize = 10000, string $contentRepository = 'default'): void {
+    public function catchUpCommand(int $batchSize = 10000, string $contentRepository = 'default'): void
+    {
         $result = $this->indexCatchUpService->catchUp(ContentRepositoryId::fromString($contentRepository), $batchSize);
 
         match ($result->outcome) {
@@ -83,7 +86,8 @@ class NodeIndexCommandController extends CommandController {
         };
     }
 
-    public function createIndexCommand(): void {
+    public function createIndexCommand(): void
+    {
         $this->indexClient->createIndex();
         $this->outputLine('Created and update settings of index');
     }
@@ -95,7 +99,8 @@ class NodeIndexCommandController extends CommandController {
      * @return void
      * @throws Exception
      */
-    public function buildCommand(?int $limit = null): void {
+    public function buildCommand(?int $limit = null): void
+    {
         $startTime = microtime(true);
         $this->indexClient->createIndex();
 
@@ -124,7 +129,8 @@ class NodeIndexCommandController extends CommandController {
      * @return void
      * @throws Exception
      */
-    public function rebuildCommand(?int $limit = null, bool $skipRemoval = true): void {
+    public function rebuildCommand(?int $limit = null, bool $skipRemoval = true): void
+    {
         $startTime = microtime(true);
         $contentRepositoryId = ContentRepositoryId::fromString('default');
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
@@ -168,7 +174,8 @@ class NodeIndexCommandController extends CommandController {
     /**
      * Delete all documents from the index.
      */
-    public function flushCommand(): void {
+    public function flushCommand(): void
+    {
         $this->indexClient->deleteAllDocuments();
         $this->outputLine('All documents flushed from the index.');
     }
@@ -178,7 +185,8 @@ class NodeIndexCommandController extends CommandController {
      * dimension, and $limit caps the count per dimension — so the total advances
      * are $limit times the number of dimensions.
      */
-    protected function progressMax(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, ?int $limit): int {
+    protected function progressMax(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, ?int $limit): int
+    {
         if ($limit === null) {
             return $this->workspaceIndexer->count($contentRepositoryId, $workspaceName);
         }
@@ -192,7 +200,8 @@ class NodeIndexCommandController extends CommandController {
      * @param Node $node
      * @return bool
      */
-    protected function isFulltextRoot(NodeAggregate $node): bool {
+    protected function isFulltextRoot(NodeAggregate $node): bool
+    {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
         $nodeType = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
         if ($nodeType === null) {

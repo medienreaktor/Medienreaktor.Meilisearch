@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Domain\Service;
@@ -49,5 +50,4 @@ class NodeLinkService
         $uri = $nodeUriBuilder->uriFor($nodeAddress, Options::createForceAbsolute());
         return $uri;
     }
-
 }

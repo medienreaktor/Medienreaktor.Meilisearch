@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Indexer;
@@ -33,6 +34,7 @@ use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
 use Neos\Rector\ContentRepository90\Legacy\LegacyContextStub;
 use Psr\Http\Message\UriInterface;
 use Ramsey\Uuid\Exception\NodeException;
+
 use function RectorPrefix202304\dump;
 
 /**
@@ -40,8 +42,8 @@ use function RectorPrefix202304\dump;
  *
  * @Flow\Scope("singleton")
  */
-class NodeIndexer extends AbstractNodeIndexer {
-
+class NodeIndexer extends AbstractNodeIndexer
+{
     /**
      * @Flow\Inject
      * @var IndexInterface
@@ -83,7 +85,8 @@ class NodeIndexer extends AbstractNodeIndexer {
     #[\Neos\Flow\Annotations\Inject]
     protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
 
-    public function initializeObject($cause) {
+    public function initializeObject($cause)
+    {
         parent::initializeObject($cause);
         putenv('FLOW_REWRITEURLS=1');
     }
@@ -91,7 +94,8 @@ class NodeIndexer extends AbstractNodeIndexer {
     /**
      * @return IndexInterface
      */
-    public function getIndexClient(): IndexInterface {
+    public function getIndexClient(): IndexInterface
+    {
         return $this->indexClient;
     }
 
@@ -102,7 +106,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param string $targetWorkspace
      * @return void
      */
-    public function indexNode(Node $node, ?WorkspaceName $targetWorkspaceName = null): void {
+    public function indexNode(Node $node, ?WorkspaceName $targetWorkspaceName = null): void
+    {
         // Make sure this is a fulltext root, e.g. Neos.Neos:Document or subtype
         $node = $this->findFulltextRoot($node);
 
@@ -142,7 +147,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param string $targetWorkspace
      * @return void
      */
-    public function indexSingleNode(Node $node, bool $skipRemoval = false, ?string $targetIndexName = null): void {
+    public function indexSingleNode(Node $node, bool $skipRemoval = false, ?string $targetIndexName = null): void
+    {
         $node = $this->findFulltextRoot($node);
         if ($node !== null) {
             // The rebuild build index is fresh/empty, so the per-node delete is
@@ -167,7 +173,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param DimensionSpacePoint $dimensionCombination
      * @return array
      */
-    protected function extractNodeVariant(Node $node, DimensionSpacePoint $dimensionCombination): array|null {
+    protected function extractNodeVariant(Node $node, DimensionSpacePoint $dimensionCombination): array|null
+    {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
 
         $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($dimensionCombination, VisibilityConstraints::createEmpty());
@@ -179,7 +186,8 @@ class NodeIndexer extends AbstractNodeIndexer {
     /**
      * @return array<string, mixed>
      */
-    protected function extractDocument(Node $node): array {
+    protected function extractDocument(Node $node): array
+    {
         $fulltext = [];
 
         $document = $this->extractPropertiesAndFulltext($node, $fulltext);
@@ -201,7 +209,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * way nodeindex:build sees them: a removed variant, or one below a removed node, is
      * left out. indexNode() reads without visibility constraints and would bring it back.
      */
-    public function reindexFulltextRoot(ContentRepositoryId $contentRepositoryId, NodeAggregateId $nodeAggregateId): void {
+    public function reindexFulltextRoot(ContentRepositoryId $contentRepositoryId, NodeAggregateId $nodeAggregateId): void
+    {
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $contentGraph = $contentRepository->getContentGraph(WorkspaceName::forLive());
 
@@ -219,14 +228,16 @@ class NodeIndexer extends AbstractNodeIndexer {
         }
     }
 
-    public function removeFulltextRoot(NodeAggregateId $nodeAggregateId): void {
+    public function removeFulltextRoot(NodeAggregateId $nodeAggregateId): void
+    {
         $this->indexClient->deleteByFilter('__identifier = "' . $nodeAggregateId->value . '"');
     }
 
     /**
      * The node itself if it is a fulltext root, otherwise its closest fulltext root ancestor.
      */
-    public function fulltextRootOf(Node $node): ?Node {
+    public function fulltextRootOf(Node $node): ?Node
+    {
         return $this->findFulltextRoot($node);
     }
 
@@ -238,16 +249,19 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param string|null $targetIndexName Delete from this index instead of the live one (rebuild)
      * @return void
      */
-    public function removeNode(Node $node, WorkspaceName|null $targetWorkspaceName = null, ?string $targetIndexName = null): void {
+    public function removeNode(Node $node, WorkspaceName|null $targetWorkspaceName = null, ?string $targetIndexName = null): void
+    {
         $identifier = $this->generateUniqueNodeIdentifier($node);
         $this->indexClient->deleteDocuments([$identifier], $targetIndexName);
     }
 
-    public function flush(?string $targetIndexName = null): void {
+    public function flush(?string $targetIndexName = null): void
+    {
         $this->flushBuffer($targetIndexName);
     }
 
-    protected function flushBuffer(?string $targetIndexName = null): void {
+    protected function flushBuffer(?string $targetIndexName = null): void
+    {
         if (empty($this->documentBuffer)) {
             return;
         }
@@ -261,7 +275,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param Node $node
      * @return Node
      */
-    protected function findFulltextRoot(Node $node): ?Node {
+    protected function findFulltextRoot(Node $node): ?Node
+    {
         if ($this->isFulltextRoot($node)) {
             return $node;
         }
@@ -290,7 +305,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param Node $node
      * @return bool
      */
-    protected function isFulltextRoot(Node $node): bool {
+    protected function isFulltextRoot(Node $node): bool
+    {
         $nodeType = $this->getNodeType($node);
         if ($nodeType === null) {
             return false;
@@ -312,7 +328,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param Node $node
      * @return UriInterface|null
      */
-    protected function getNodeUri(Node $node): ?UriInterface {
+    protected function getNodeUri(Node $node): ?UriInterface
+    {
         if (!$this->isDocument($node)) {
             return null;
         }
@@ -328,7 +345,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param Node $node
      * @return bool
      */
-    protected function isDocument(Node $node): bool {
+    protected function isDocument(Node $node): bool
+    {
         $nodeType = $this->getNodeType($node);
         return $nodeType !== null && $nodeType->isOfType('Neos.Neos:Document');
     }
@@ -337,7 +355,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param Node $node
      * @return NodeType|null
      */
-    protected function getNodeType(Node $node): ?NodeType {
+    protected function getNodeType(Node $node): ?NodeType
+    {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
         return $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
     }
@@ -348,7 +367,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @return DimensionSpacePointSet
      *
      */
-    protected function calculateDimensionCombinations(Node $node): DimensionSpacePointSet {
+    protected function calculateDimensionCombinations(Node $node): DimensionSpacePointSet
+    {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
         $dimensions = $contentRepository->getVariationGraph()->getDimensionSpacePoints();
         return $dimensions;
@@ -364,7 +384,8 @@ class NodeIndexer extends AbstractNodeIndexer {
         return $fulltext;
     }
 
-    protected function extractPropertiesAndFulltext(Node|null $node, array &$fulltextData, \Closure $nonIndexedPropertyErrorHandler = null): array {
+    protected function extractPropertiesAndFulltext(Node|null $node, array &$fulltextData, \Closure $nonIndexedPropertyErrorHandler = null): array
+    {
         $result = parent::extractPropertiesAndFulltext($node, $fulltextData, $nonIndexedPropertyErrorHandler);
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
         $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($node->dimensionSpacePoint, VisibilityConstraints::createEmpty());
@@ -379,7 +400,8 @@ class NodeIndexer extends AbstractNodeIndexer {
     }
 
 
-    protected function enrichWithFulltextForContentNodes(Node $node, array &$fulltextData, FindChildNodesFilter $filter): void {
+    protected function enrichWithFulltextForContentNodes(Node $node, array &$fulltextData, FindChildNodesFilter $filter): void
+    {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
         $nodeType = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
         if ($nodeType === null) {
@@ -411,7 +433,8 @@ class NodeIndexer extends AbstractNodeIndexer {
      * @param Node $node
      * @return string
      */
-    protected function generateUniqueNodeIdentifier(Node $node): string {
+    protected function generateUniqueNodeIdentifier(Node $node): string
+    {
         $nodeIdentifier = (string)$node->aggregateId;
         $dimensionsHash = $node->dimensionSpacePoint->hash;
         return $nodeIdentifier . '_' . $dimensionsHash;

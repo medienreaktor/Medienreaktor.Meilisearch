@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Domain\Service;
@@ -16,7 +17,8 @@ use Neos\Flow\Annotations as Flow;
 /**
  * Meilisearch Index client
  */
-class MeilisearchIndex implements IndexInterface {
+class MeilisearchIndex implements IndexInterface
+{
     /**
      * Marks an index as a rebuild scratch index; everything after it is the
      * per-run suffix. Also used to recognise leftovers from aborted runs.
@@ -60,16 +62,19 @@ class MeilisearchIndex implements IndexInterface {
      * @param string $indexName
      * @Flow\Autowiring(false)
      */
-    public function __construct(string $indexName) {
+    public function __construct(string $indexName)
+    {
         $this->indexName = $indexName;
     }
 
-    public function initializeObject(): void {
+    public function initializeObject(): void
+    {
         $this->client = new Client($this->clientSettings['endpoint'], $this->clientSettings['apiKey']);
         $this->index = $this->client->index($this->indexName);
     }
 
-    protected function targetIndex(?string $targetIndexName): Indexes {
+    protected function targetIndex(?string $targetIndexName): Indexes
+    {
         return $targetIndexName !== null ? $this->client->index($targetIndexName) : $this->index;
     }
 
@@ -79,7 +84,8 @@ class MeilisearchIndex implements IndexInterface {
      * index can exceed — the task then still completes, but the caller sees a
      * TimeOutException and reports a successful rebuild as a failure.
      */
-    protected function taskTimeout(): int {
+    protected function taskTimeout(): int
+    {
         return (int)($this->indexingSettings['taskTimeout'] ?? 300000);
     }
 
@@ -89,7 +95,8 @@ class MeilisearchIndex implements IndexInterface {
      * @param array $task Task payload as returned by the client
      * @throws Exception
      */
-    protected function awaitTask(array $task): array {
+    protected function awaitTask(array $task): array
+    {
         $result = $this->client->waitForTask($task['taskUid'], $this->taskTimeout());
         if (($result['status'] ?? null) !== 'succeeded') {
             throw new Exception('Meilisearch task ' . ($task['type'] ?? 'unknown') . ' failed: ' . ($result['error']['message'] ?? 'no error message'));
@@ -108,7 +115,8 @@ class MeilisearchIndex implements IndexInterface {
      * The setup tasks are awaited: if documents arrived before the primary key /
      * settings were applied, Meilisearch could infer a wrong key or drop them.
      */
-    public function createBuildIndex(): string {
+    public function createBuildIndex(): string
+    {
         $this->deleteStaleBuildIndexes();
 
         $buildIndexName = $this->indexName . self::BUILD_INDEX_INFIX . date('YmdHis') . '-' . bin2hex(random_bytes(3));
@@ -135,7 +143,8 @@ class MeilisearchIndex implements IndexInterface {
      * @return array<string,int> Number of copied documents per label
      * @throws Exception
      */
-    public function preserveDocuments(string $buildIndexName): array {
+    public function preserveDocuments(string $buildIndexName): array
+    {
         $filters = $this->indexingSettings['preserveOnRebuild'] ?? [];
         if (!is_array($filters) || $filters === []) {
             return [];
@@ -159,7 +168,8 @@ class MeilisearchIndex implements IndexInterface {
      *
      * @throws Exception
      */
-    protected function copyDocumentsByFilter(string $filter, string $buildIndexName, int $batchSize): int {
+    protected function copyDocumentsByFilter(string $filter, string $buildIndexName, int $batchSize): int
+    {
         $copied = 0;
         $offset = 0;
         do {
@@ -182,7 +192,8 @@ class MeilisearchIndex implements IndexInterface {
      * untouched — if the build index is empty, so a broken build can never
      * wipe search.
      */
-    public function swapBuildIndex(string $buildIndexName): void {
+    public function swapBuildIndex(string $buildIndexName): void
+    {
         $builtDocuments = $this->client->index($buildIndexName)->stats()['numberOfDocuments'] ?? 0;
         if ($builtDocuments < 1) {
             throw new Exception('Zero-downtime rebuild aborted: build index "' . $buildIndexName . '" is empty — live index left untouched.');
@@ -206,7 +217,8 @@ class MeilisearchIndex implements IndexInterface {
      * the configured TTL are removed — a younger one may belong to a rebuild
      * that is still running.
      */
-    protected function deleteStaleBuildIndexes(): void {
+    protected function deleteStaleBuildIndexes(): void
+    {
         $prefix = $this->indexName . self::BUILD_INDEX_INFIX;
         $ttl = (int)($this->indexingSettings['staleBuildIndexTtl'] ?? 86400);
         $threshold = time() - $ttl;
@@ -231,14 +243,16 @@ class MeilisearchIndex implements IndexInterface {
     /**
      * Discard a build index (error cleanup); live is left untouched.
      */
-    public function deleteBuildIndex(string $buildIndexName): void {
+    public function deleteBuildIndex(string $buildIndexName): void
+    {
         try {
             $this->client->deleteIndex($buildIndexName);
         } catch (\Throwable $e) {
         }
     }
 
-    public function createIndex(): void {
+    public function createIndex(): void
+    {
         $this->client->createIndex($this->indexName);
         $this->index->updateSettings(IndexSettings::fromConfiguration($this->indexSettings)->toArray());
         $this->index->update(['primaryKey' => 'id']);
@@ -250,7 +264,8 @@ class MeilisearchIndex implements IndexInterface {
      * @return void
      * @throws TimeOutException
      */
-    public function addDocuments(array $documents, ?string $targetIndexName = null): void {
+    public function addDocuments(array $documents, ?string $targetIndexName = null): void
+    {
         $this->awaitTask($this->targetIndex($targetIndexName)->addDocuments($documents));
     }
 
@@ -259,14 +274,16 @@ class MeilisearchIndex implements IndexInterface {
      * @param string|null $targetIndexName Delete from this index instead of the live one
      * @return void
      */
-    public function deleteDocuments(array $documents, ?string $targetIndexName = null): void {
+    public function deleteDocuments(array $documents, ?string $targetIndexName = null): void
+    {
         $this->targetIndex($targetIndexName)->deleteDocuments($documents);
     }
 
     /**
      * Delete all documents from the index.
      */
-    public function deleteAllDocuments(): void {
+    public function deleteAllDocuments(): void
+    {
         $this->index->deleteAllDocuments();
     }
 
@@ -277,7 +294,8 @@ class MeilisearchIndex implements IndexInterface {
      * @param string|null $targetIndexName Delete from this index instead of the live one
      * @return void
      */
-    public function deleteByFilter(array|string $filter, ?string $targetIndexName = null): void {
+    public function deleteByFilter(array|string $filter, ?string $targetIndexName = null): void
+    {
         $filterString = is_array($filter) ? implode(' AND ', $filter) : $filter;
         $this->targetIndex($targetIndexName)->deleteDocuments(['filter' => $filterString]);
     }
@@ -288,7 +306,8 @@ class MeilisearchIndex implements IndexInterface {
      * @param string $identifier
      * @return array|FALSE
      */
-    public function findOneByIdentifier(string $identifier) {
+    public function findOneByIdentifier(string $identifier)
+    {
         try {
             $document = $this->index->getDocument($identifier);
             if ($document) {
@@ -307,7 +326,8 @@ class MeilisearchIndex implements IndexInterface {
      * @param string $identifier
      * @return array|FALSE
      */
-    public function findAllIdentifiersByIdentifier(string $identifier) {
+    public function findAllIdentifiersByIdentifier(string $identifier)
+    {
         $results = $this->index->search('', ['filter' => ['__identifier = "' . $identifier . '"']]);
 
         $hits = [];
@@ -324,7 +344,8 @@ class MeilisearchIndex implements IndexInterface {
      * @param array $parameters
      * @return SearchResult
      */
-    public function search(string $query, array $parameters): SearchResult {
+    public function search(string $query, array $parameters): SearchResult
+    {
         if (isset($parameters['filter']) && is_array($parameters['filter'])) {
             $parameters['filter'] = implode(' AND ', $parameters['filter']);
         }
@@ -336,7 +357,8 @@ class MeilisearchIndex implements IndexInterface {
     /**
      * @return string
      */
-    public function getIndexName(): string {
+    public function getIndexName(): string
+    {
         return $this->indexName;
     }
 }
