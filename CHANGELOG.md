@@ -43,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `MeilisearchIndex::updateCustomSettings()` replaces and applies an index's
+  settings, for custom indices with settings of their own, and
+  `findAllIdentifiersByIdentifierAndDimensionsHash()` lists a node's documents in one
+  dimension space point. `deleteByFilter()` also takes Meilisearch's options array
+  (`['filter' => '...']`) and ignores an empty filter instead of sending it. All as on
+  the Neos 8 line.
 - `executeWithoutProcessing()` returns the raw hits without resolving nodes, and
   `executeRaw()` returns asset documents written into the same index (`__isAsset`, or
   an `__path` containing `assets`) instead of failing on their missing

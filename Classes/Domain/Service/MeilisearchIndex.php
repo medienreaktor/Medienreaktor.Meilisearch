@@ -298,14 +298,25 @@ class MeilisearchIndex implements IndexInterface
     /**
      * Delete documents matching the given Meilisearch filter expression.
      *
-     * @param array<int,string>|string $filter
+     * @param array<int|string,mixed>|string $filter A raw filter string, a list of filter
+     *     clauses joined with AND (e.g. ['__identifier = "123"', '__dimensionsHash = "abc"']),
+     *     or the options Meilisearch takes (e.g. ['filter' => '__identifier = "123"'])
      * @param string|null $targetIndexName Delete from this index instead of the live one
      * @return void
      */
     public function deleteByFilter(array|string $filter, ?string $targetIndexName = null): void
     {
-        $filterString = is_array($filter) ? implode(' AND ', $filter) : $filter;
-        $this->targetIndex($targetIndexName)->deleteDocuments(['filter' => $filterString]);
+        if ($filter === [] || $filter === '') {
+            return;
+        }
+
+        if (is_array($filter) && array_key_exists('filter', $filter)) {
+            $options = $filter;
+        } else {
+            $options = ['filter' => is_array($filter) ? implode(' AND ', $filter) : $filter];
+        }
+
+        $this->targetIndex($targetIndexName)->deleteDocuments($options);
     }
 
     /**
@@ -343,6 +354,49 @@ class MeilisearchIndex implements IndexInterface
             $hits[] = $hit['id'];
         }
         return $hits;
+    }
+
+    /**
+     * Returns the ids of a node's documents in the given dimension space point.
+     *
+     * @param string $identifier
+     * @param string $dimensionsHash
+     * @return array<int,string>
+     */
+    public function findAllIdentifiersByIdentifierAndDimensionsHash(string $identifier, string $dimensionsHash): array
+    {
+        $results = $this->index->search('', ['filter' => [
+            '__identifier = "' . $identifier . '"',
+            '__dimensionsHash = "' . $dimensionsHash . '"',
+        ]]);
+
+        $hits = [];
+        foreach ($results->getHits() as $hit) {
+            $hits[] = $hit['id'];
+        }
+        return $hits;
+    }
+
+    /**
+     * Replace this index's settings with the given ones and apply them, e.g. for a
+     * custom index with settings of its own. Later createIndex() and
+     * nodeindex:rebuild runs on this instance use them as well.
+     *
+     * Takes the shape of `Medienreaktor.Meilisearch.settings`; `filterableAttributes`
+     * and `sortableAttributes` may also be given as the plain lists Meilisearch takes.
+     *
+     * @param array<string,mixed> $settings
+     */
+    public function updateCustomSettings(array $settings): void
+    {
+        foreach (['filterableAttributes', 'sortableAttributes'] as $key) {
+            if (isset($settings[$key]) && is_array($settings[$key]) && array_is_list($settings[$key])) {
+                $settings[$key] = array_fill_keys($settings[$key], true);
+            }
+        }
+
+        $this->indexSettings = $settings;
+        $this->awaitTask($this->index->updateSettings(IndexSettings::fromConfiguration($this->indexSettings)->toArray()));
     }
 
     /**
