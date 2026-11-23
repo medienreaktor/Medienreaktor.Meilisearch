@@ -17,15 +17,18 @@ use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryI
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
+use Neos\ContentRepository\Search\Indexer\BulkNodeIndexerInterface;
 use Neos\Flow\Annotations as Flow;
 use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
 
 /**
  * Indexer for Content Repository Nodes.
  *
+ * Writes are buffered and go out in batches; flush() says when.
+ *
  * @Flow\Scope("singleton")
  */
-class NodeIndexer extends AbstractNodeIndexer
+class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterface
 {
     /**
      * @Flow\Inject
@@ -33,13 +36,55 @@ class NodeIndexer extends AbstractNodeIndexer
      */
     protected $indexClient;
 
-    protected array $documentBuffer = [];
+    /**
+     * Used when no setting supplies a batch size, as in unit tests that construct the
+     * indexer without the Flow proxy.
+     */
+    private const DEFAULT_BATCH_SIZE = 100;
 
     /**
      * @Flow\InjectConfiguration(path="indexing.batchSize", package="Medienreaktor.Meilisearch")
-     * @var int
+     * @var int|null
      */
     protected $batchSize;
+
+    /**
+     * Documents awaiting the next write, keyed by document id, so that indexing the same
+     * variant twice in one batch writes it once.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    protected array $bufferedDocuments = [];
+
+    /**
+     * Document ids awaiting deletion, used as a set.
+     *
+     * @var array<string, true>
+     */
+    protected array $bufferedDocumentDeletions = [];
+
+    /**
+     * Node aggregate ids whose documents await deletion, used as a set.
+     *
+     * @var array<string, true>
+     */
+    protected array $bufferedIdentifierDeletions = [];
+
+    /**
+     * The index the buffer is written to; null for the live index.
+     */
+    protected ?string $bufferTargetIndexName = null;
+
+    /**
+     * Whether the index is known to hold no documents, which makes every deletion a
+     * no-op worth skipping. Only a caller that has just emptied the index can know this.
+     */
+    protected bool $assumeEmptyIndex = false;
+
+    /**
+     * How many withBulkProcessing() calls are open.
+     */
+    protected int $bulkProcessingDepth = 0;
 
     /**
      * @Flow\InjectConfiguration(path="indexing.maxFulltextBytes", package="Medienreaktor.Meilisearch")
@@ -90,84 +135,77 @@ class NodeIndexer extends AbstractNodeIndexer
     }
 
     /**
-     * Add or update a node in the index with all node variants.
+     * Add or update a node in the index with all its dimension variants.
+     *
+     * The node's fulltext root is indexed, e.g. the page a content element is on.
+     * Writes are buffered; flush() says when they reach the index.
      *
      * @param Node $node
-     * @param string $targetWorkspace
+     * @param WorkspaceName|null $targetWorkspaceName Ignored: the index holds live content only
      * @return void
      */
     public function indexNode(Node $node, ?WorkspaceName $targetWorkspaceName = null): void
     {
-        // Make sure this is a fulltext root, e.g. Neos.Neos:Document or subtype
         $node = $this->findFulltextRoot($node);
-
-        if ($node !== null) {
-            // The node aggregate identifier is a shared node identifier across all variants
-            $nodeIdentifier = (string)$node->aggregateId;
-
-            // By filter rather than search-then-delete: a search returns at most 20 hits,
-            // which silently left variants behind on sites with more dimension combinations.
-            $this->indexClient->deleteByFilter('__identifier = "' . $nodeIdentifier . '"');
-
-            $documents = [];
-
-            // For each dimension combination, extract the node variant properties and fulltext
-            $dimensionCombinations = $this->calculateDimensionCombinations($node);
-            if ($dimensionCombinations->count() > 0) {
-                foreach ($dimensionCombinations as $combination) {
-                    if ($nodeVariant = $this->extractNodeVariant($node, $combination)) {
-                        $documents[] = $nodeVariant;
-                    }
-                }
-            } else {
-                if ($nodeVariant = $this->extractNodeVariant($node, DimensionSpacePoint::createWithoutDimensions())) {
-                    $documents[] = $nodeVariant;
-                }
-            }
-
-            // Finally, send all node variant documents to the index
-            $this->indexClient->addDocuments($documents);
+        if ($node === null) {
+            return;
         }
+
+        $this->bufferIdentifierDeletion($node->aggregateId->value);
+
+        $dimensionSpacePoints = $this->calculateDimensionCombinations($node);
+        if ($dimensionSpacePoints->isEmpty()) {
+            $dimensionSpacePoints = [DimensionSpacePoint::createWithoutDimensions()];
+        }
+        foreach ($dimensionSpacePoints as $dimensionSpacePoint) {
+            $document = $this->extractNodeVariant($node, $dimensionSpacePoint);
+            if ($document !== null) {
+                $this->bufferDocument($document);
+            }
+        }
+
+        $this->flushIfBufferIsFull();
     }
 
     /**
-     * Add or update a node in the index with all node variants.
+     * Add or update the given variant of a node only, as nodeindex:build visits them.
      *
      * @param Node $node
-     * @param string $targetWorkspace
+     * @param bool $skipRemoval Skip deleting the previous document, which is safe on an empty index
+     * @param string|null $targetIndexName Write to this index instead of the live one (rebuild)
      * @return void
      */
     public function indexSingleNode(Node $node, bool $skipRemoval = false, ?string $targetIndexName = null): void
     {
         $node = $this->findFulltextRoot($node);
-        if ($node !== null) {
-            // The rebuild build index is fresh/empty, so the per-node delete is
-            // pure overhead; documents upsert by id, so skipping removal is safe.
-            if (!$skipRemoval) {
-                $this->removeNode($node, null, $targetIndexName);
-            }
-            $nodeVariant = $this->extractNodeVariant($node, $node->dimensionSpacePoint);
-            if ($nodeVariant !== null) {
-                $this->documentBuffer[] = $nodeVariant;
-            }
-            if (count($this->documentBuffer) >= $this->batchSize) {
-                $this->flushBuffer($targetIndexName);
-            }
+        if ($node === null) {
+            return;
         }
+
+        $this->switchTargetIndex($targetIndexName);
+        if (!$skipRemoval) {
+            $this->bufferDocumentDeletion($this->generateUniqueNodeIdentifier($node));
+        }
+        $document = $this->extractNodeVariant($node, $node->dimensionSpacePoint);
+        if ($document !== null) {
+            $this->bufferDocument($document);
+        }
+
+        $this->flushIfBufferIsFull();
     }
 
     /**
-     * Extract node variant properties and fulltext for a given dimension combination
+     * Extract node variant properties and fulltext for a given dimension space point
      *
-     * @param string $nodeIdentifier
-     * @param DimensionSpacePoint $dimensionCombination
-     * @return array
+     * @param Node $node
+     * @param DimensionSpacePoint $dimensionSpacePoint
+     * @return array<string, mixed>|null Null when the node is not visible there
      */
-    protected function extractNodeVariant(Node $node, DimensionSpacePoint $dimensionCombination): array|null
+    protected function extractNodeVariant(Node $node, DimensionSpacePoint $dimensionSpacePoint): ?array
     {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
 
-        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($dimensionCombination, self::visibilityConstraints());
+        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($dimensionSpacePoint, self::visibilityConstraints());
         $node = $subgraph->findNodeById($node->aggregateId);
 
         return $node !== null ? $this->extractDocument($node) : null;
@@ -216,24 +254,22 @@ class NodeIndexer extends AbstractNodeIndexer
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $contentGraph = $contentRepository->getContentGraph(WorkspaceName::forLive());
 
-        $documents = [];
+        $this->bufferIdentifierDeletion($nodeAggregateId->value);
         foreach ($contentRepository->getVariationGraph()->getDimensionSpacePoints() as $dimensionSpacePoint) {
             $node = $contentGraph->getSubgraph($dimensionSpacePoint, self::visibilityConstraints())->findNodeById($nodeAggregateId);
             $document = $node !== null ? $this->extractDocument($node) : null;
             if ($document !== null) {
-                $documents[] = $document;
+                $this->bufferDocument($document);
             }
         }
 
-        $this->removeFulltextRoot($nodeAggregateId);
-        if ($documents !== []) {
-            $this->indexClient->addDocuments($documents);
-        }
+        $this->flushIfBufferIsFull();
     }
 
     public function removeFulltextRoot(NodeAggregateId $nodeAggregateId): void
     {
-        $this->indexClient->deleteByFilter('__identifier = "' . $nodeAggregateId->value . '"');
+        $this->bufferIdentifierDeletion($nodeAggregateId->value);
+        $this->flushIfBufferIsFull();
     }
 
     /**
@@ -245,31 +281,203 @@ class NodeIndexer extends AbstractNodeIndexer
     }
 
     /**
-     * Remove a node from the index.
+     * Remove a node's document in the node's dimension space point from the index.
      *
      * @param Node $node
-     * @param WorkspaceName|null $targetWorkspaceName
+     * @param WorkspaceName|null $targetWorkspaceName Ignored: the index holds live content only
      * @param string|null $targetIndexName Delete from this index instead of the live one (rebuild)
      * @return void
      */
-    public function removeNode(Node $node, WorkspaceName|null $targetWorkspaceName = null, ?string $targetIndexName = null): void
+    public function removeNode(Node $node, ?WorkspaceName $targetWorkspaceName = null, ?string $targetIndexName = null): void
     {
-        $identifier = $this->generateUniqueNodeIdentifier($node);
-        $this->indexClient->deleteDocuments([$identifier], $targetIndexName);
+        $this->switchTargetIndex($targetIndexName);
+        $this->bufferDocumentDeletion($this->generateUniqueNodeIdentifier($node));
+        $this->flushIfBufferIsFull();
     }
 
+    /**
+     * Write everything buffered so far - or, while withBulkProcessing() is open, only a
+     * full buffer.
+     *
+     * Meilisearch queues one task per write request, and writing per node turns every
+     * node into two tasks. Buffering collapses a whole batch into one deletion and one
+     * addition. Neos.ContentRepository.Search flushes after every draining of its
+     * indexing queue, from inside withBulkProcessing(); a flush there writes nothing
+     * until the buffer is full, and the last buffer goes out in shutdownObject().
+     * Called directly, as the index commands and the catch-up do, it writes everything.
+     *
+     * @param string|null $targetIndexName Write to this index instead of the live one (rebuild)
+     * @return void
+     */
     public function flush(?string $targetIndexName = null): void
     {
-        $this->flushBuffer($targetIndexName);
-    }
-
-    protected function flushBuffer(?string $targetIndexName = null): void
-    {
-        if (empty($this->documentBuffer)) {
+        $this->switchTargetIndex($targetIndexName);
+        if ($this->bulkProcessingDepth > 0) {
+            $this->flushIfBufferIsFull();
             return;
         }
-        $this->indexClient->addDocuments($this->documentBuffer, $targetIndexName);
-        $this->documentBuffer = [];
+
+        $this->writeBuffer();
+    }
+
+    /**
+     * Run the callback with flushes deferred to full buffers.
+     *
+     * Neos.ContentRepository.Search wraps each draining of its indexing queue in this.
+     * Nothing is written when the callback returns: the buffer carries over to the next
+     * call. A depth rather than a flag, so that a nested call cannot end the outer one.
+     *
+     * @param callable $callback
+     * @return void
+     */
+    public function withBulkProcessing(callable $callback): void
+    {
+        $this->bulkProcessingDepth++;
+        try {
+            $callback();
+        } finally {
+            $this->bulkProcessingDepth--;
+        }
+    }
+
+    /**
+     * Flow calls this as the request or command ends: whatever deferred flushes left in
+     * the buffer is written here.
+     *
+     * @return void
+     */
+    public function shutdownObject(): void
+    {
+        $this->flush($this->bufferTargetIndexName);
+    }
+
+    /**
+     * Drop whatever is buffered without writing it, e.g. when the index it was meant
+     * for has been discarded.
+     */
+    public function discardBuffer(): void
+    {
+        $this->bufferedIdentifierDeletions = [];
+        $this->bufferedDocumentDeletions = [];
+        $this->bufferedDocuments = [];
+        $this->bufferTargetIndexName = null;
+    }
+
+    /**
+     * Declare that the index holds no documents, which makes every deletion this
+     * indexer would buffer a no-op. Only safe for a caller that has just emptied the
+     * index itself.
+     *
+     * @return void
+     */
+    public function assumeEmptyIndex(): void
+    {
+        $this->assumeEmptyIndex = true;
+    }
+
+    /**
+     * How many buffered writes go out together; also the request batch size.
+     */
+    public function batchSize(): int
+    {
+        return max(1, (int)($this->batchSize ?? self::DEFAULT_BATCH_SIZE));
+    }
+
+    /**
+     * Writes the buffer in a fixed order: stale variants by aggregate, then documents by
+     * id, then additions. Buffering coalesces per document as it goes, so that this order
+     * cannot reorder a deletion and an addition of the same document.
+     */
+    protected function writeBuffer(): void
+    {
+        $identifierDeletions = array_keys($this->bufferedIdentifierDeletions);
+        $documentDeletions = array_keys($this->bufferedDocumentDeletions);
+        $documents = array_values($this->bufferedDocuments);
+        $targetIndexName = $this->bufferTargetIndexName;
+
+        // Cleared up front so that a failing write cannot be retried into a loop by a
+        // caller that flushes again in its error handling.
+        $this->bufferedIdentifierDeletions = [];
+        $this->bufferedDocumentDeletions = [];
+        $this->bufferedDocuments = [];
+
+        if ($identifierDeletions !== []) {
+            $this->indexClient->deleteByIdentifiers($identifierDeletions, $targetIndexName);
+        }
+        if ($documentDeletions !== []) {
+            $this->indexClient->deleteDocuments($documentDeletions, $targetIndexName);
+        }
+        if ($documents !== []) {
+            $this->indexClient->addDocuments($documents, $targetIndexName);
+        }
+    }
+
+    /**
+     * A buffer belongs to one index. Writing to another one, as nodeindex:rebuild does,
+     * first sends what was buffered for the previous.
+     */
+    protected function switchTargetIndex(?string $targetIndexName): void
+    {
+        if ($targetIndexName === $this->bufferTargetIndexName) {
+            return;
+        }
+        $this->writeBuffer();
+        $this->bufferTargetIndexName = $targetIndexName;
+    }
+
+    /**
+     * @param array<string, mixed> $document
+     */
+    protected function bufferDocument(array $document): void
+    {
+        $documentIdentifier = (string)$document['id'];
+
+        // An addition supersedes a deletion of the same document buffered before it.
+        unset($this->bufferedDocumentDeletions[$documentIdentifier]);
+        $this->bufferedDocuments[$documentIdentifier] = $document;
+    }
+
+    protected function bufferDocumentDeletion(string $documentIdentifier): void
+    {
+        // A deletion supersedes an addition of the same document buffered before it.
+        unset($this->bufferedDocuments[$documentIdentifier]);
+        if (!$this->assumeEmptyIndex) {
+            $this->bufferedDocumentDeletions[$documentIdentifier] = true;
+        }
+    }
+
+    /**
+     * Deletes every variant of a node aggregate, including those buffered before:
+     * the deletions are written ahead of the additions, so a buffered variant would
+     * otherwise survive a later reindex that no longer produces it.
+     */
+    protected function bufferIdentifierDeletion(string $nodeAggregateId): void
+    {
+        $prefix = $nodeAggregateId . '_';
+        foreach (array_keys($this->bufferedDocuments) as $documentIdentifier) {
+            if (str_starts_with((string)$documentIdentifier, $prefix)) {
+                unset($this->bufferedDocuments[$documentIdentifier]);
+            }
+        }
+        if (!$this->assumeEmptyIndex) {
+            $this->bufferedIdentifierDeletions[$nodeAggregateId] = true;
+        }
+    }
+
+    /**
+     * Writes once the buffer has reached its size, and only ever between nodes: a node
+     * whose deletions and additions were split across two writes would be missing from
+     * the index in between.
+     */
+    protected function flushIfBufferIsFull(): void
+    {
+        $buffered = count($this->bufferedDocuments)
+            + count($this->bufferedDocumentDeletions)
+            + count($this->bufferedIdentifierDeletions);
+
+        if ($buffered >= $this->batchSize()) {
+            $this->writeBuffer();
+        }
     }
 
     /**

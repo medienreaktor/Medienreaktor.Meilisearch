@@ -58,6 +58,24 @@ interface IndexInterface
     public function deleteDocuments(array $documents, ?string $targetIndexName = null): void;
 
     /**
+     * Delete every indexed variant of the given node aggregates.
+     *
+     * @param array<int,string> $nodeIdentifiers Node aggregate identifiers
+     * @param string|null $targetIndexName Delete from this index instead of the live one
+     * @return void
+     */
+    public function deleteByIdentifiers(array $nodeIdentifiers, ?string $targetIndexName = null): void;
+
+    /**
+     * Block until the index has no unfinished task left, failing if any task this
+     * instance enqueued did not succeed.
+     *
+     * @param int $timeoutInSeconds
+     * @return void
+     */
+    public function waitForPendingTasks(int $timeoutInSeconds): void;
+
+    /**
      * Delete all documents from the index.
      *
      * @return void

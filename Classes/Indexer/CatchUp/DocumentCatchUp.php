@@ -88,6 +88,7 @@ class DocumentCatchUp
         foreach (array_diff_key($toReindex, $toRemove) as $nodeAggregateId) {
             $this->nodeIndexer->reindexFulltextRoot($contentRepositoryId, $nodeAggregateId);
         }
+        $this->nodeIndexer->flush();
 
         return count($toRemove) + count(array_diff_key($toReindex, $toRemove));
     }

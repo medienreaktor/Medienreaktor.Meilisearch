@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Real-time and catch-up indexing write in batches instead of one deletion and one
+  addition per node. `NodeIndexer` implements `BulkNodeIndexerInterface`: inside
+  `withBulkProcessing()`, as Neos.ContentRepository.Search drains its queue, `flush()`
+  writes only a full buffer, and the rest is written when Flow shuts the indexer down.
+  A node reindexed twice in one batch no longer keeps a variant the second run dropped.
+  As on the Neos 8 line (2.11.0, 2.13.0).
+- `nodeindex:build` and `nodeindex:rebuild` release Doctrine's identity map once per
+  write batch, so entities loaded while extracting properties do not pile up for the
+  whole run (as on the Neos 8 line, 2.12.0).
 - Hidden (disabled) nodes and everything below them are not indexed, and a node that
   becomes hidden leaves the index on its next reindex, as on the Neos 8 line.
   `nodeindex:build`, `nodeindex:rebuild` and `nodeindex:catchup` read live without
@@ -54,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `nodeindex:build --wait [--timeout <seconds>]` returns only once Meilisearch has no
+  unfinished task for the index and fails if a task of the run failed;
+  `--assume-empty-index` skips deletions on an index the caller has just emptied.
+  `IndexInterface` gains `deleteByIdentifiers()` and `waitForPendingTasks()` for them.
+  As on the Neos 8 line (2.11.0).
 - `enableFulltext: false` leaves `__fulltext` out of the documents, and
   `neededAttributesForIndex` lists attributes without which a node is removed from
   the index instead of indexed. Both as on the Neos 8 line.

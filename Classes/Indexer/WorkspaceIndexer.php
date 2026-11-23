@@ -62,10 +62,14 @@ final class WorkspaceIndexer
     private array $fulltextRootCriteria = [];
 
     /**
-     * @param string $workspaceName
-     * @param integer $limit
-     * @param callable $callback
-     * @return integer
+     * @param ContentRepositoryId $contentRepositoryId
+     * @param WorkspaceName $workspaceName
+     * @param int|null $limit
+     * @param callable|null $callback Called after each dimension space point
+     * @param callable|null $singleCallback Called after each visited node
+     * @param bool $skipRemoval
+     * @param string|null $targetIndexName
+     * @return int
      */
     public function index(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int
     {
@@ -187,10 +191,14 @@ final class WorkspaceIndexer
     }
 
     /**
-     * @param string $workspaceName
-     * @param array $dimensions
+     * @param ContentRepositoryId $contentRepositoryId
+     * @param WorkspaceName $workspaceName
+     * @param DimensionSpacePoint $dimensionSpacePoint
      * @param int|null $limit
-     * @param callable $callback
+     * @param callable|null $callback
+     * @param callable|null $singleCallback
+     * @param bool $skipRemoval
+     * @param string|null $targetIndexName
      * @return int
      */
     public function indexWithDimensions(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint, ?int $limit = null, ?callable $callback = null, ?callable $singleCallback = null, bool $skipRemoval = false, ?string $targetIndexName = null): int

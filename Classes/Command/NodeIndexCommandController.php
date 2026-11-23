@@ -16,6 +16,7 @@ use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Annotations\Inject;
 use Neos\Flow\Cli\CommandController;
+use Neos\Flow\Persistence\PersistenceManagerInterface;
 
 /**
  * CLI commands for index building and flushing
@@ -43,9 +44,19 @@ class NodeIndexCommandController extends CommandController
 
 
     /**
+     * Long enough for a full rebuild of a large site to drain, short enough that a
+     * wedged queue is reported rather than waited on until the scheduler kills the
+     * command.
+     */
+    private const DEFAULT_WAIT_TIMEOUT_IN_SECONDS = 1800;
+
+    /**
      * @var integer
      */
     protected $indexedNodes = 0;
+
+    #[Inject]
+    protected PersistenceManagerInterface $persistenceManager;
     #[Inject]
     protected ContentRepositoryRegistry $contentRepositoryRegistry;
 
@@ -106,24 +117,46 @@ class NodeIndexCommandController extends CommandController
     /**
      * Index all nodes in-place into the live index.
      *
+     * The index is incomplete while this runs; nodeindex:rebuild avoids that.
+     *
      * @param int|null $limit Only index up to this many nodes per dimension (for quick testing)
+     * @param bool $wait Return only once Meilisearch has finished indexing, and fail if it did not succeed
+     * @param int $timeout How long to wait, in seconds; only meaningful together with --wait
+     * @param bool $assumeEmptyIndex Skip deletions, which cannot match anything on an index the caller has just emptied
      * @return void
      * @throws Exception
      */
-    public function buildCommand(?int $limit = null): void
+    public function buildCommand(?int $limit = null, bool $wait = false, int $timeout = self::DEFAULT_WAIT_TIMEOUT_IN_SECONDS, bool $assumeEmptyIndex = false): void
     {
         $startTime = microtime(true);
         $this->indexClient->createIndex();
+
+        if ($assumeEmptyIndex) {
+            $this->nodeIndexer->assumeEmptyIndex();
+        }
 
         $contentRepositoryId = ContentRepositoryId::fromString('default');
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $workspace = $contentRepository->findWorkspaceByName(WorkspaceName::forLive());
 
         $this->output->progressStart($this->progressMax($contentRepositoryId, $workspace->workspaceName, $limit));
-        $this->indexedNodes = $this->workspaceIndexer->index($contentRepositoryId, $workspace->workspaceName, limit: $limit, singleCallback: fn() => $this->output->progressAdvance());
+        $this->indexedNodes = $this->workspaceIndexer->index(
+            $contentRepositoryId,
+            $workspace->workspaceName,
+            limit: $limit,
+            singleCallback: $this->progressCallback(null)
+        );
+        $this->nodeIndexer->flush();
         $this->output->progressFinish();
 
         $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes in ' . round(microtime(true) - $startTime, 1) . 's.');
+
+        if ($wait) {
+            $this->outputLine('Waiting up to %d seconds for Meilisearch to finish indexing...', [$timeout]);
+            // The indexer's own client is the one holding the enqueued tasks.
+            $this->nodeIndexer->getIndexClient()->waitForPendingTasks($timeout);
+            $this->outputLine('Index is up to date.');
+        }
     }
 
     /**
@@ -154,7 +187,7 @@ class NodeIndexCommandController extends CommandController
                 $contentRepositoryId,
                 $workspace->workspaceName,
                 limit: $limit,
-                singleCallback: fn() => $this->output->progressAdvance(),
+                singleCallback: $this->progressCallback($buildIndexName),
                 skipRemoval: $skipRemoval,
                 targetIndexName: $buildIndexName
             );
@@ -175,6 +208,7 @@ class NodeIndexCommandController extends CommandController
             }
             $this->indexClient->swapBuildIndex($buildIndexName);
         } catch (\Throwable $e) {
+            $this->nodeIndexer->discardBuffer();
             $this->indexClient->deleteBuildIndex($buildIndexName);
             throw $e;
         }
@@ -189,6 +223,30 @@ class NodeIndexCommandController extends CommandController
     {
         $this->indexClient->deleteAllDocuments();
         $this->outputLine('All documents flushed from the index.');
+    }
+
+    /**
+     * Advances the progress bar per node and releases memory once per write batch: the
+     * buffered documents are sent, then Doctrine's identity map is dropped and the
+     * cycle collector runs. Entities loaded while extracting properties (assets, sites)
+     * would otherwise stay for the whole run. Safe here because the commands only read
+     * nodes and write to Meilisearch - nothing detached is ever persisted again.
+     */
+    protected function progressCallback(?string $targetIndexName): \Closure
+    {
+        $releaseEvery = $this->nodeIndexer->batchSize();
+        $sinceRelease = 0;
+
+        return function () use ($targetIndexName, $releaseEvery, &$sinceRelease): void {
+            $this->output->progressAdvance();
+            if (++$sinceRelease < $releaseEvery) {
+                return;
+            }
+            $sinceRelease = 0;
+            $this->nodeIndexer->flush($targetIndexName);
+            $this->persistenceManager->clearState();
+            gc_collect_cycles();
+        };
     }
 
     /**

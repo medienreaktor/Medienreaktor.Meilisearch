@@ -9,6 +9,7 @@ use Medienreaktor\Meilisearch\Domain\Model\IndexSettings;
 use Meilisearch\Client;
 use Meilisearch\Contracts\DocumentsQuery;
 use Meilisearch\Contracts\IndexesQuery;
+use Meilisearch\Contracts\TasksQuery;
 use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Exceptions\TimeOutException;
 use Meilisearch\Search\SearchResult;
@@ -24,6 +25,30 @@ class MeilisearchIndex implements IndexInterface
      * per-run suffix. Also used to recognise leftovers from aborted runs.
      */
     private const BUILD_INDEX_INFIX = '-build-';
+
+    /**
+     * Used when no setting supplies a batch size, as in unit tests that construct this
+     * class without the Flow proxy.
+     */
+    private const DEFAULT_BATCH_SIZE = 100;
+
+    /**
+     * How often waitForPendingTasks() asks whether the index still has work queued.
+     */
+    private const WAIT_POLL_INTERVAL_IN_MS = 500;
+
+    /**
+     * Task uids per outcome query, so that a long run cannot build a query string too
+     * long to send.
+     */
+    private const TASK_QUERY_CHUNK_SIZE = 500;
+
+    /**
+     * Uids of the tasks this instance enqueued and has not yet waited for.
+     *
+     * @var list<int>
+     */
+    protected array $pendingTaskUids = [];
 
     /**
      * @var string
@@ -266,7 +291,9 @@ class MeilisearchIndex implements IndexInterface
      */
     public function addDocuments(array $documents, ?string $targetIndexName = null): void
     {
-        $this->awaitTask($this->targetIndex($targetIndexName)->addDocuments($documents));
+        foreach (array_chunk($documents, $this->batchSize()) as $chunk) {
+            $this->awaitTask($this->rememberTask($this->targetIndex($targetIndexName)->addDocuments($chunk)));
+        }
     }
 
     /**
@@ -276,7 +303,101 @@ class MeilisearchIndex implements IndexInterface
      */
     public function deleteDocuments(array $documents, ?string $targetIndexName = null): void
     {
-        $this->targetIndex($targetIndexName)->deleteDocuments($documents);
+        foreach (array_chunk(array_values($documents), $this->batchSize()) as $chunk) {
+            $this->rememberTask($this->targetIndex($targetIndexName)->deleteDocuments($chunk));
+        }
+    }
+
+    /**
+     * Delete every indexed variant of the given node aggregates.
+     *
+     * Variants are addressed by filter, as their ids carry a dimensions hash the caller
+     * does not necessarily know. One `IN` expression covers a whole chunk of aggregates,
+     * so a batch of nodes costs one deletion task rather than one per node.
+     *
+     * @param array<int,string> $nodeIdentifiers Node aggregate identifiers
+     * @param string|null $targetIndexName Delete from this index instead of the live one
+     * @return void
+     */
+    public function deleteByIdentifiers(array $nodeIdentifiers, ?string $targetIndexName = null): void
+    {
+        foreach (array_chunk(array_values($nodeIdentifiers), $this->batchSize()) as $chunk) {
+            $this->deleteByFilter('__identifier IN ["' . implode('", "', $chunk) . '"]', $targetIndexName);
+        }
+    }
+
+    /**
+     * Block until the index has no unfinished task left, whoever enqueued it, then fail
+     * if any task this instance enqueued did not succeed: Meilisearch drops a failed
+     * indexing task silently, so an index can finish its work and still be incomplete.
+     *
+     * @param int $timeoutInSeconds
+     * @return void
+     * @throws Exception
+     */
+    public function waitForPendingTasks(int $timeoutInSeconds): void
+    {
+        $uids = $this->pendingTaskUids;
+        $this->pendingTaskUids = [];
+
+        $deadline = microtime(true) + $timeoutInSeconds;
+        while (($unfinished = $this->firstUnfinishedTask()) !== null) {
+            if (microtime(true) >= $deadline) {
+                throw new Exception(sprintf(
+                    'Index "%s" still had unfinished work after %d seconds: task %s (%s) is %s.',
+                    $this->indexName,
+                    $timeoutInSeconds,
+                    (string)($unfinished['uid'] ?? 'unknown'),
+                    (string)($unfinished['type'] ?? 'unknown type'),
+                    (string)($unfinished['status'] ?? 'unknown status')
+                ), 1787000101);
+            }
+            usleep(self::WAIT_POLL_INTERVAL_IN_MS * 1000);
+        }
+
+        foreach (array_chunk($uids, self::TASK_QUERY_CHUNK_SIZE) as $chunk) {
+            $failed = $this->client->getTasks((new TasksQuery())->setUids($chunk)->setStatuses(['failed'])->setLimit(1))->getResults();
+            if ($failed !== []) {
+                throw new Exception(sprintf(
+                    'Indexing task %s on index "%s" failed: %s',
+                    (string)($failed[0]['uid'] ?? 'unknown'),
+                    $this->indexName,
+                    (string)($failed[0]['error']['message'] ?? 'no message reported')
+                ), 1787000102);
+            }
+        }
+    }
+
+    /**
+     * @return array<string, mixed>|null The oldest task the index still has to do
+     */
+    protected function firstUnfinishedTask(): ?array
+    {
+        $query = (new TasksQuery())
+            ->setIndexUids([$this->indexName])
+            ->setStatuses(['enqueued', 'processing'])
+            ->setLimit(1);
+
+        return $this->client->getTasks($query)->getResults()[0] ?? null;
+    }
+
+    /**
+     * Meilisearch answers a write with the task it queued for it.
+     *
+     * @param array<string, mixed> $task
+     * @return array<string, mixed> The task, unchanged
+     */
+    protected function rememberTask(array $task): array
+    {
+        if (isset($task['taskUid'])) {
+            $this->pendingTaskUids[] = (int)$task['taskUid'];
+        }
+        return $task;
+    }
+
+    protected function batchSize(): int
+    {
+        return max(1, (int)($this->indexingSettings['batchSize'] ?? self::DEFAULT_BATCH_SIZE));
     }
 
     /**
@@ -316,7 +437,7 @@ class MeilisearchIndex implements IndexInterface
             $options = ['filter' => is_array($filter) ? implode(' AND ', $filter) : $filter];
         }
 
-        $this->targetIndex($targetIndexName)->deleteDocuments($options);
+        $this->rememberTask($this->targetIndex($targetIndexName)->deleteDocuments($options));
     }
 
     /**

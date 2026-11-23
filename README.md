@@ -136,6 +136,23 @@ Two gaps are left to the nightly rebuild: a content node removed for good (not
 soft-removed by tag, as the Neos UI does) can no longer be traced to its document,
 and changes published while `nodeindex:rebuild` runs can be overwritten by its swap.
 
+### Building in place
+
+`flow nodeindex:build` indexes into the live index. Writes go out in batches of
+`indexing.batchSize` documents (default 100), as Meilisearch queues one task per
+write request. Options:
+
+- `--wait` returns only once Meilisearch reports no unfinished task for the index,
+  and fails if a task the run enqueued did not succeed; `--timeout <seconds>` bounds
+  the wait (default 1800). Use it when something must not go live on a half-built
+  index.
+- `--assume-empty-index` skips deletions, which cannot match anything on an index
+  the caller has just emptied (`nodeindex:flush` or `nodeindex:deleteindex` before).
+- `--limit <n>` caps the indexed nodes per dimension.
+
+`flow nodeindex:deleteindex` removes the index itself, settings included;
+`flow nodeindex:flush` removes its documents only.
+
 ### Rebuilding without downtime
 
 `flow nodeindex:build` writes into the live index, so while it runs the index is
