@@ -260,6 +260,7 @@ The search query builder supports the following features:
 | `highlight(properties, highlightTags)`       | Highlight search results for given properties, e.g. `highlight(['__fulltext.text'])`, highlighted with given tags (optional, default: `['<em'>, '</em>']`) |
 | `crop(cropLength, cropMarker)`               | Sets the highlighting snippets length in words and the crop marker (optional, default: `'…'`) |
 | `matchingStrategy(value)`                    | Sets the matching strategy `'last'` or `'all'`, (default: `'last'`) |
+| `distinct(attribute)`                        | Returns at most one hit per value of a filterable attribute, e.g. `distinct('__identifier')` |
 | `geoRadius(lat, lng, distance)`              | Filters by geo radius |
 | `geoPoint(lat, lng)`                         | Sort by geo point |
 | `execute()`                                  | Execute the query and return resulting nodes |

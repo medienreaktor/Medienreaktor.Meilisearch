@@ -249,6 +249,20 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
+     * Return at most one hit per value of the given attribute.
+     *
+     * The attribute must be in `settings.filterableAttributes`.
+     *
+     * @param string $attribute
+     * @return QueryBuilderInterface
+     */
+    public function distinct(string $attribute): QueryBuilderInterface
+    {
+        $this->parameters['distinct'] = $attribute;
+        return $this;
+    }
+
+    /**
      * Execute the query and return the list of nodes as result
      *
      * @return \Traversable<Node>
