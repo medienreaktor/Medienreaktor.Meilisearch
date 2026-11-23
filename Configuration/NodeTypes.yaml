@@ -37,7 +37,7 @@
   properties:
     _hidden:
       search:
-        indexing: '${node.hidden}'
+        indexing: '${Neos.Node.isDisabled(node)}'
 'Neos.Neos:Timable':
   properties:
     _hiddenBeforeDateTime:
@@ -54,7 +54,7 @@
   properties:
     _hiddenInIndex:
       search:
-        indexing: '${node.hiddenInIndex}'
+        indexing: '${node.properties.hiddenInMenu == true}'
     title:
       search:
         fulltextExtractor: '${Indexing.extractHtmlTags(node.properties.title)}'

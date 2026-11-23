@@ -28,7 +28,6 @@ use Neos\ContentRepository\Search\Indexer\NodeIndexingManager;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
 use Neos\Neos\Domain\Service\NodeTypeNameFactory;
-use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
 
 /**
  * Workspace Indexer for Content Repository Nodes.
@@ -104,7 +103,7 @@ final class WorkspaceIndexer
         $rootNodeTypeCriteria = $this->fulltextRootNodeTypeCriteria($contentRepository);
         $total = 0;
         foreach ($dimensionSpacePoints as $dimensionSpacePoint) {
-            $subgraph = $contentGraph->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved());
+            $subgraph = $contentGraph->getSubgraph($dimensionSpacePoint, NodeIndexer::visibilityConstraints());
             $total += $subgraph->countDescendantNodes($rootNodeAggregate->nodeAggregateId, CountDescendantNodesFilter::create(nodeTypes: $rootNodeTypeCriteria));
             // The sites root itself is visited before the descendants.
             $total++;
@@ -200,7 +199,7 @@ final class WorkspaceIndexer
         $contentGraph = $contentRepository->getContentGraph($workspaceName);
 
         $rootNodeAggregate = $contentGraph->findRootNodeAggregateByType(NodeTypeNameFactory::forSites());
-        $subgraph = $contentGraph->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved());
+        $subgraph = $contentGraph->getSubgraph($dimensionSpacePoint, NodeIndexer::visibilityConstraints());
 
         $rootNode = $subgraph->findNodeById($rootNodeAggregate->nodeAggregateId);
         $indexedNodes = 0;

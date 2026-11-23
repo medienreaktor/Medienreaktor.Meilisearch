@@ -9,6 +9,7 @@ use Medienreaktor\Meilisearch\Domain\Service\NodeLinkService;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePointSet;
 use Neos\ContentRepository\Core\NodeType\NodeType;
+use Neos\ContentRepository\Core\Projection\ContentGraph\ContentSubgraphInterface;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\ContentRepository\Core\Projection\ContentGraph\VisibilityConstraints;
@@ -63,6 +64,16 @@ class NodeIndexer extends AbstractNodeIndexer
      * @var NodeLinkService
      */
     protected $nodeLinkService;
+
+    /**
+     * What the index holds: live content as a visitor sees it, without soft-removed and
+     * without disabled (hidden) nodes, nor anything below them. A node becoming hidden
+     * so leaves the index on its next reindex, as on the Neos 8 line.
+     */
+    public static function visibilityConstraints(): VisibilityConstraints
+    {
+        return NeosVisibilityConstraints::excludeRemoved()->merge(NeosVisibilityConstraints::excludeDisabled());
+    }
 
     public function initializeObject($cause)
     {
@@ -156,7 +167,7 @@ class NodeIndexer extends AbstractNodeIndexer
     {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
 
-        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($dimensionCombination, VisibilityConstraints::createEmpty());
+        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($dimensionCombination, self::visibilityConstraints());
         $node = $subgraph->findNodeById($node->aggregateId);
 
         return $node !== null ? $this->extractDocument($node) : null;
@@ -197,8 +208,8 @@ class NodeIndexer extends AbstractNodeIndexer
 
     /**
      * Replace every document of one fulltext root with its current live variants, seen the
-     * way nodeindex:build sees them: a removed variant, or one below a removed node, is
-     * left out. indexNode() reads without visibility constraints and would bring it back.
+     * way nodeindex:build sees them: a removed or hidden variant, or one below a removed or
+     * hidden node, is left out.
      */
     public function reindexFulltextRoot(ContentRepositoryId $contentRepositoryId, NodeAggregateId $nodeAggregateId): void
     {
@@ -207,7 +218,7 @@ class NodeIndexer extends AbstractNodeIndexer
 
         $documents = [];
         foreach ($contentRepository->getVariationGraph()->getDimensionSpacePoints() as $dimensionSpacePoint) {
-            $node = $contentGraph->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved())->findNodeById($nodeAggregateId);
+            $node = $contentGraph->getSubgraph($dimensionSpacePoint, self::visibilityConstraints())->findNodeById($nodeAggregateId);
             $document = $node !== null ? $this->extractDocument($node) : null;
             if ($document !== null) {
                 $documents[] = $document;
@@ -377,8 +388,7 @@ class NodeIndexer extends AbstractNodeIndexer
             return $result;
         }
 
-        $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
-        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($node->dimensionSpacePoint, VisibilityConstraints::createEmpty());
+        $subgraph = $this->contentSubgraphOf($node);
         $filter = FindChildNodesFilter::create(nodeTypes: 'Neos.Neos:Content,Neos.Neos:ContentCollection');
         $childNodes = $subgraph->findChildNodes($node->aggregateId, $filter);
 
@@ -409,12 +419,23 @@ class NodeIndexer extends AbstractNodeIndexer
         if (($searchConfiguration['fulltext']['excludeChildren'] ?? false) === true) {
             return;
         }
-        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($node->dimensionSpacePoint, VisibilityConstraints::createEmpty());
-        $childNodes = $subgraph->findChildNodes($node->aggregateId, $filter);
+        $childNodes = $this->contentSubgraphOf($node)->findChildNodes($node->aggregateId, $filter);
 
         foreach ($childNodes as $childNode) {
             $this->enrichWithFulltextForContentNodes($childNode, $fulltextData, $filter);
         }
+    }
+
+    /**
+     * The subgraph a node was read from: its content is collected the way the node
+     * itself was seen, so a hidden content element of an indexed page stays out of its
+     * fulltext.
+     */
+    protected function contentSubgraphOf(Node $node): ContentSubgraphInterface
+    {
+        return $this->contentRepositoryRegistry->get($node->contentRepositoryId)
+            ->getContentGraph($node->workspaceName)
+            ->getSubgraph($node->dimensionSpacePoint, $node->visibilityConstraints);
     }
 
     /**

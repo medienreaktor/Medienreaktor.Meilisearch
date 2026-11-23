@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hidden (disabled) nodes and everything below them are not indexed, and a node that
+  becomes hidden leaves the index on its next reindex, as on the Neos 8 line.
+  `nodeindex:build`, `nodeindex:rebuild` and `nodeindex:catchup` read live without
+  removed nodes only, so hidden pages were indexed - or the build aborted on them,
+  since Neos 9 cannot route a disabled node - and real-time indexing read without any
+  constraint, removed nodes included. A page's fulltext no longer contains its hidden
+  content elements either. Run `nodeindex:rebuild` to drop hidden pages.
+- `_hidden` and `_hiddenInIndex` are indexed from Neos 9 node data (the `disabled`
+  subtree tag and the `hiddenInMenu` property). They read `node.hidden` and
+  `node.hiddenInIndex`, which Neos 9 nodes do not have, and were null on every
+  document.
 - No "implicitly nullable parameter" deprecations on PHP 8.4:
   `IndexFactory::create()`, `RequestService::createActionRequest()` and
   `NodeIndexer::extractPropertiesAndFulltext()` declare their nullable parameters.
