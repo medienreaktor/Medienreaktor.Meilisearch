@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `AssetUri.build()` indexes stable proxy URIs (`/search/thumbnail/<asset id>?width=…`)
+  served by the new `ThumbnailController`, which creates the thumbnail on request and
+  redirects to it. The indexed URIs pointed at a thumbnail entity or a resource, and
+  broke with `media:clearthumbnails` or a resource cleanup. The route is registered
+  before Neos' own and open to everybody. As on the Neos 8 line (2.6.0); reindex to
+  get the new URIs.
 - `Search.query(node)` filters on the dimension space point's hash, as indexed in
   `__dimensionsHash`. It hashed the JSON of the coordinates in their configured order,
   which differs from the indexed hash whenever that order is not alphabetical, e.g.
