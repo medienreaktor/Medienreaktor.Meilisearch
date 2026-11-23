@@ -10,8 +10,8 @@ use Neos\Eel\ProtectedContextAwareInterface;
 use Neos\Flow\Annotations as Flow;
 
 /**
- * The paths a node is indexed under, for indexing configuration and for building
- * filters in Fusion, e.g. `__parentPath = "${IndexPath.of(site)}"`.
+ * The index paths of a node, for filters written in Fusion, e.g.
+ * `${IndexPath.below(site)}` for everything below the site. See IndexPathService.
  */
 class IndexPathHelper implements ProtectedContextAwareInterface
 {
@@ -19,7 +19,7 @@ class IndexPathHelper implements ProtectedContextAwareInterface
     protected IndexPathService $indexPathService;
 
     /**
-     * The node's own path, as indexed in `__path`
+     * The path of the node itself: the `__path` of its children
      */
     public function of(Node $node): string
     {
@@ -27,13 +27,19 @@ class IndexPathHelper implements ProtectedContextAwareInterface
     }
 
     /**
-     * The paths of all the node's ancestors, as indexed in `__parentPath`
-     *
-     * @return list<string>
+     * A filter matching every document below the node
      */
-    public function parents(Node $node): array
+    public function below(Node $node): string
     {
-        return $this->indexPathService->parentPathsOf($node);
+        return $this->indexPathService->belowFilter($node);
+    }
+
+    /**
+     * A filter matching the node's own document and every document below it
+     */
+    public function selfAndBelow(Node $node): string
+    {
+        return $this->indexPathService->selfAndBelowFilter($node);
     }
 
     /**

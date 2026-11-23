@@ -118,10 +118,9 @@ class MeilisearchHelper implements ProtectedContextAwareInterface
      */
     public function frontendFilter(Node $siteNode, DimensionSpacePoint|array $dimensions = [], array $additionalFilters = []): string
     {
-        $siteNodePath = $this->indexPathService->pathOf($siteNode);
         $dimensionsHash = $dimensions === [] ? $this->dimensionsService->hashByNode($siteNode) : $this->dimensionsService->hash($dimensions);
         $filters = [
-            '(__parentPath = "' . $this->escapeFilterValue($siteNodePath) . '" OR __path = "' . $this->escapeFilterValue($siteNodePath) . '")',
+            $this->indexPathService->selfAndBelowFilter($siteNode),
             '__dimensionsHash = "' . $this->escapeFilterValue($dimensionsHash) . '"',
             '_hidden = false',
             '_hiddenInIndex = false',

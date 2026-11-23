@@ -198,15 +198,24 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * Search by vector only, through the configured embedder.
+     * Search by vector only.
      *
-     * @param string $searchWord
-     * @param array{embedder?: string, semanticRatio?: float} $options `embedder` defaults to "default", `semanticRatio` to 1.0
+     * Given a search term, Meilisearch embeds it through the configured embedder,
+     * as hybrid() with a semantic ratio of 1.0. Given a list of floats, the vector is
+     * searched as it is, in Meilisearch's `vector` search parameter.
+     *
+     * @param string|list<float> $searchWordOrVector
+     * @param array{embedder?: string, semanticRatio?: float} $options For a search term: `embedder`, default "default", and `semanticRatio`, default 1.0
      * @return QueryBuilderInterface
      */
-    public function vector(string $searchWord, array $options = []): QueryBuilderInterface
+    public function vector(string|array $searchWordOrVector, array $options = []): QueryBuilderInterface
     {
-        return $this->hybrid($searchWord, ['semanticRatio' => 1.0] + $options);
+        if (is_array($searchWordOrVector)) {
+            $this->parameters['vector'] = $searchWordOrVector;
+            return $this;
+        }
+
+        return $this->hybrid($searchWordOrVector, ['semanticRatio' => 1.0] + $options);
     }
 
     /**
@@ -346,20 +355,15 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
      * The node a hit stands for, read in the context node's subgraph, or null when the
      * hit is no node document or its node is not visible there.
      *
-     * Resolved by aggregate id: `__aggregateId`, or the last segment of `__path` for
-     * documents indexed before that attribute existed.
+     * Resolved by `__aggregateId`, or `__identifier`, which holds the same id.
      *
      * @param array<string, mixed> $hit
      */
     protected function resolveNode(array $hit): ?Node
     {
-        $aggregateId = $hit['__aggregateId'] ?? null;
+        $aggregateId = $hit['__aggregateId'] ?? $hit['__identifier'] ?? null;
         if (!is_string($aggregateId) || $aggregateId === '') {
-            $path = $hit['__path'] ?? null;
-            if (!is_string($path) || $path === '') {
-                return null;
-            }
-            $aggregateId = basename($path);
+            return null;
         }
 
         try {
@@ -430,9 +434,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
         $this->contextNode = $contextNode;
 
         $dimensionsHash = $this->dimensionsService->hashByNode($contextNode);
-        // The context node itself, or any node below it
-        $contextPath = $this->indexPathService->pathOf($contextNode);
-        $this->parameters['filter'][] = '(__parentPath = "' . $contextPath . '" OR __path = "' . $contextPath . '")';
+        $this->parameters['filter'][] = $this->indexPathService->belowFilter($contextNode);
         $this->parameters['filter'][] = '__dimensionsHash = "' . $dimensionsHash . '"';
 
         return $this;

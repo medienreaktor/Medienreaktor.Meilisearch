@@ -8,31 +8,30 @@ use Medienreaktor\Meilisearch\Domain\Service\IndexPathService;
 use PHPUnit\Framework\TestCase;
 
 /**
- * `__parentPath = "<path of X>"` has to find every node below X, the direct children
- * included, and `__path` has to be the node's own path.
+ * A document records the path of its parent in `__path` and the paths above that in
+ * `__parentPath`, as the 3.x line has indexed them from the start. A filter for
+ * "below X" has to look in both.
  */
 class IndexPathServiceTest extends TestCase
 {
-    public function testThePathEndsWithTheNodeItself(): void
+    public function testAPathListsTheAggregateIdsFromTheRootDown(): void
     {
         self::assertSame('/root/site/page', IndexPathService::pathFromAggregateIds(['root', 'site', 'page']));
     }
 
-    public function testParentPathsIncludeTheDirectParent(): void
+    public function testBelowMatchesChildrenByPathAndDeeperNodesByParentPath(): void
     {
         self::assertSame(
-            ['/', '/root', '/root/site', '/root/site/page'],
-            IndexPathService::parentPathsFromPath('/root/site/page/product')
+            '(__parentPath = "/root/site" OR __path = "/root/site")',
+            IndexPathService::belowFilterForPath('/root/site')
         );
     }
 
-    public function testARootNodeHasOnlyTheRootParentPath(): void
+    public function testBelowEscapesQuotesInThePath(): void
     {
-        self::assertSame(['/'], IndexPathService::parentPathsFromPath('/root'));
-    }
-
-    public function testAnEmptyPathHasNoParentPaths(): void
-    {
-        self::assertSame([], IndexPathService::parentPathsFromPath(''));
+        self::assertSame(
+            '(__parentPath = "/a\\"b" OR __path = "/a\\"b")',
+            IndexPathService::belowFilterForPath('/a"b')
+        );
     }
 }

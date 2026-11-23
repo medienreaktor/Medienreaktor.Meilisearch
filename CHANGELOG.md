@@ -11,9 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **No stray `Neos.Neos:Timable` node type.** The package configured the Neos 8
-  mixin, which Neos 9 does not have, and so created a node type of that name.
-
+- `execute()` returns the nodes it found. It looked hits up by `__path` as a path of
+  node names, which a path of aggregate ids is not, and so returned nothing; hits are
+  resolved by `__aggregateId` now.
+- No stray `Neos.Neos:Timable` node type. The package configured the Neos 8 mixin,
+  which Neos 9 does not have, and so created a node type of that name.
 - `AssetUri.build()` indexes stable proxy URIs (`/search/thumbnail/<asset id>?width=…`)
   served by the new `ThumbnailController`, which creates the thumbnail on request and
   redirects to it. The indexed URIs pointed at a thumbnail entity or a resource, and
@@ -55,25 +57,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NodeLinkService` and `RequestService` no longer reference Neos 8 classes
   (`Neos\ContentRepository\Domain\Service\Context`, `NodeInterface`).
 
-### Changed
-
-- **BREAKING: `__path` and `__parentPath` mean what they meant on the Neos 8 line.**
-  `__path` is the node's own aggregate-id path, `/<rootId>/<siteId>/…/<nodeId>`, and
-  `__parentPath` holds the path of every ancestor, the direct parent included. Both
-  were one level short: `__path` was the parent's path, so a hit's `__path` did not
-  address its node and `__parentPath = "<path of X>"` missed X's direct children.
-  `Search.query(node)` keeps its results. Run `nodeindex:rebuild` after upgrading;
-  until then `query()` misses the direct children of the context node.
-- **BREAKING: `vector()` takes a search term and options, as on the Neos 8 line.**
-  `vector(searchTerm, {embedder, semanticRatio})` searches through a Meilisearch
-  embedder configured in `settings.embedders`; `vector(array $vector)` with
-  precomputed vectors is gone, as is Meilisearch's experimental `vector` search
-  parameter it set.
-- `execute()` resolves hits by node aggregate id; it looked them up as node name
-  paths, which aggregate-id paths are not, and so returned nothing.
-- `NodeLinkService::getNodeUri()` returns the URI as a string, as on the Neos 8 line,
-  instead of a `UriInterface`; `__uri` holds the same value as before.
-
 ### Added
 
 - The `Meilisearch` Eel helper for frontend tenant tokens
@@ -83,8 +66,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dimensions argument is a dimension space point or its coordinates instead of
   `site.context.dimensions`; `[]` uses the site node's own.
 - The `Dimensions` Eel helper (`Dimensions.hash(dimensions)`,
-  `Dimensions.hashByNode(node)`) and `DimensionsService`, as on the Neos 8 line. On
-  Neos 9 the hash is the dimension space point's own hash, which `__dimensionsHash`
+  `Dimensions.hashByNode(node)`) and `DimensionsService::hash()` and `hashByNode()`,
+  as on the Neos 8 line. The Neos 8 line's dimension combinations have no
+  counterpart: the content repository's variation graph replaces them. On Neos 9 the
+  hash is the dimension space point's own hash, which `__dimensionsHash`
   already holds; Neos 8 style values lists count with their first value. Documents
   carry the node's coordinates as `__dimensions` again.
 - `NodeIndexer::indexNode()` takes `$indexAllDimensions` and
@@ -112,10 +97,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `distinct(attribute)` on the query builder, as on the Neos 8 line.
 - `hybrid(searchTerm, {embedder, semanticRatio})` on the query builder combines
   keyword and vector search (Meilisearch 1.6 or newer with an embedder).
-- The `IndexPath` Eel helper, in Fusion and in indexing expressions:
-  `IndexPath.of(node)` is the node's `__path`, `IndexPath.parents(node)` its
-  `__parentPath`. In PHP, `IndexPathService::pathOf()` and `parentPathsOf()`. Use them
-  to build filters for a context node outside the query builder.
+- The `IndexPath` Eel helper and `IndexPathService` for path filters outside the query
+  builder: `IndexPath.of(node)` is the node's own path, the `__path` of its children;
+  `IndexPath.below(node)` and `IndexPath.selfAndBelow(node)` are ready-made filters
+  for its subtree, without and with the node itself. In PHP, `pathOf()`,
+  `belowFilter()` and `selfAndBelowFilter()`. The indexed `__path` and `__parentPath`
+  are unchanged.
+- `vector()` also takes a search term and options, as on the Neos 8 line:
+  `vector(searchTerm, {embedder, semanticRatio})` searches through a Meilisearch
+  embedder configured in `settings.embedders`. `vector(array $vector)` with a
+  precomputed vector works as before.
 - `nodeindex:deleteindex` deletes the index itself, settings included, as on the
   Neos 8 line; `nodeindex:flush` still only removes the documents.
 - `search()` and `deleteIndex()` are declared on `IndexInterface`. The query builder

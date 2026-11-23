@@ -319,10 +319,12 @@ Setup your filter to always include the following filter string:
 `(__parentPath = "$nodePath" OR __path = "$nodePath") AND __dimensionsHash = "$dimensionsHash"`
 where `$nodePath` is the index path of your context node (e.g. site) and `$dimensionsHash` is the hash of its dimension space point.
 
-Neos 9 nodes have no path of names, so `__path` is built from node aggregate ids, from
-the content repository root down to the node itself (`/<rootId>/<siteId>/<pageId>`).
-`__parentPath` lists the paths of all ancestors, the direct parent included, so
-`__parentPath = "$nodePath"` matches every node below the context node.
+Neos 9 nodes have no path of names, so paths are built from node aggregate ids, from
+the content repository root down (`/<rootId>/<siteId>/<pageId>`). A document records
+where it hangs: `__path` is the path of its parent, and `__parentPath` the paths of the
+parent's ancestors. The filter above therefore matches every node below the context
+node, its direct children through `__path`; the context node itself is not included.
+Add `OR __identifier = "<context node id>"` to include it.
 
 You can obtain these values in PHP using:
 
@@ -341,7 +343,13 @@ dimensionsHash = ${Dimensions.hashByNode(site)}
 `Dimensions.hash(dimensions)` takes a dimension space point or its coordinates
 (`{language: 'de'}`); `DimensionsService` does the same in PHP.
 
-`IndexPath.parents(node)` returns the node's `__parentPath` values.
+`IndexPath.below(node)` returns the whole path filter for a node, and
+`IndexPath.selfAndBelow(node)` the same including the node itself;
+`IndexPathService::belowFilter()` and `selfAndBelowFilter()` do the same in PHP.
+
+To count matches per subtree, facet on both attributes and add them up: a document
+below X is counted under X's path in `__path` if it is a direct child, and in
+`__parentPath` otherwise, never in both.
 
 ### 2. Frontend tenant tokens
 

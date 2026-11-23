@@ -17,7 +17,7 @@
         indexing: '${node.aggregateId}'
     __path:
       search:
-        indexing: '${IndexPath.of(node)}'
+        indexing: '${Indexing.aggregateIdPath(node)}'
     __nodeType:
       search:
         indexing: '${node.nodeTypeName}'
@@ -32,7 +32,7 @@
         indexing: '${node.dimensionSpacePoint.hash}'
     __parentPath:
       search:
-        indexing: '${IndexPath.parents(node)}'
+        indexing: '${Array.pop(Indexing.buildAllPathPrefixes(Indexing.aggregateIdPath(node)))}'
     __sortIndex:
       search:
         indexing: '${node.index}'

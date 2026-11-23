@@ -10,13 +10,13 @@ use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
 
 /**
- * The paths a node is indexed under, as `__path` and `__parentPath`.
+ * Paths of node aggregate ids, as the index uses them to place a document in the tree.
  *
- * Neos 9 nodes have no path of names, so the path is built from node aggregate ids,
- * from the content repository root down to and including the node itself:
- * `/<rootId>/<siteId>/<pageId>`. `__parentPath` holds every ancestor's path, the direct
- * parent's included, so that one filter on it finds a whole subtree:
- * `__parentPath = "<path of X>"` matches every node below X.
+ * Neos 9 nodes have no path of names, so a path lists aggregate ids from the content
+ * repository root down: `/<rootId>/<siteId>/<pageId>`. A document records where it
+ * hangs, not where it is: `__path` is the path of its parent, and `__parentPath` the
+ * paths of the parent's ancestors, "/" first. The nodes below X are therefore those
+ * with `__path` or `__parentPath` equal to the path of X - see belowFilter().
  *
  * @Flow\Scope("singleton")
  */
@@ -26,7 +26,8 @@ class IndexPathService
     protected ContentRepositoryRegistry $contentRepositoryRegistry;
 
     /**
-     * The path the node is indexed under as `__path`
+     * The path of the node itself, ending in its own aggregate id: the `__path` of its
+     * children, and one of the `__parentPath` values of everything further below.
      */
     public function pathOf(Node $node): string
     {
@@ -44,14 +45,22 @@ class IndexPathService
     }
 
     /**
-     * The paths of all ancestors, outermost first, as indexed in `__parentPath`.
-     * Begins with "/", as on the Neos 8 line.
-     *
-     * @return list<string>
+     * A Meilisearch filter matching every document below the node, the node itself
+     * excluded.
      */
-    public function parentPathsOf(Node $node): array
+    public function belowFilter(Node $node): string
     {
-        return self::parentPathsFromPath($this->pathOf($node));
+        return self::belowFilterForPath($this->pathOf($node));
+    }
+
+    /**
+     * A Meilisearch filter matching the node's own document and every document below
+     * it. Needs `__identifier` among the filterable attributes, as it is by default.
+     */
+    public function selfAndBelowFilter(Node $node): string
+    {
+        return '(__identifier = "' . addcslashes($node->aggregateId->value, '"\\') . '" OR '
+            . substr(self::belowFilterForPath($this->pathOf($node)), 1);
     }
 
     /**
@@ -63,25 +72,12 @@ class IndexPathService
     }
 
     /**
-     * Every proper prefix of the given path, "/" first; empty for an empty path.
-     *
-     * @return list<string>
+     * A Meilisearch filter matching every document below the node with the given path.
      */
-    public static function parentPathsFromPath(string $path): array
+    public static function belowFilterForPath(string $path): string
     {
-        $segments = array_values(array_filter(explode('/', $path), static fn (string $segment) => $segment !== ''));
-        if ($segments === []) {
-            return [];
-        }
-        array_pop($segments);
+        $quoted = '"' . addcslashes($path, '"\\') . '"';
 
-        $parentPaths = ['/'];
-        $currentPath = '';
-        foreach ($segments as $segment) {
-            $currentPath .= '/' . $segment;
-            $parentPaths[] = $currentPath;
-        }
-
-        return $parentPaths;
+        return '(__parentPath = ' . $quoted . ' OR __path = ' . $quoted . ')';
     }
 }
