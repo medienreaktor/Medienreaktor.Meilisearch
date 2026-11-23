@@ -4,38 +4,20 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Indexer;
 
-use GuzzleHttp\Psr7\ServerRequest;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Domain\Service\NodeLinkService;
-use Medienreaktor\Meilisearch\Domain\Service\RequestService;
-use Neos\ContentRepository\Core\Dimension\ContentDimensionId;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePointSet;
 use Neos\ContentRepository\Core\NodeType\NodeType;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
-use Neos\ContentRepository\Core\Projection\ContentGraph\NodeAggregate;
 use Neos\ContentRepository\Core\Projection\ContentGraph\VisibilityConstraints;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
-use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
-use Neos\ContentRepository\Core\SharedModel\Node\NodeName;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
-use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
 use Neos\Flow\Annotations as Flow;
-use Neos\Flow\Mvc\ActionRequest;
-use Neos\Neos\Domain\Model\SiteNodeName;
-use Neos\Neos\Domain\Repository\SiteRepository;
 use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
-use Neos\Neos\FrontendRouting\NodeUriBuilderFactory;
-use Neos\Neos\FrontendRouting\Options;
-use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
-use Neos\Rector\ContentRepository90\Legacy\LegacyContextStub;
-use Psr\Http\Message\UriInterface;
-use Ramsey\Uuid\Exception\NodeException;
-
-use function RectorPrefix202304\dump;
 
 /**
  * Indexer for Content Repository Nodes.
@@ -66,24 +48,9 @@ class NodeIndexer extends AbstractNodeIndexer
 
     /**
      * @Flow\Inject
-     * @var SiteRepository
-     */
-    protected $siteRepository;
-
-    /**
-     * @Flow\Inject
      * @var NodeLinkService
      */
     protected $nodeLinkService;
-
-    /**
-     * @Flow\Inject
-     * @var RequestService
-     */
-    protected $requestService;
-
-    #[\Neos\Flow\Annotations\Inject]
-    protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
 
     public function initializeObject($cause)
     {
@@ -281,19 +248,13 @@ class NodeIndexer extends AbstractNodeIndexer
             return $node;
         }
 
-        try {
-            $subgraph = $this->contentRepositoryRegistry->subgraphForNode($node);
-            $currentNode = $subgraph->findParentNode($node->aggregateId);
-            while ($currentNode !== null) {
-                if ($this->isFulltextRoot($currentNode)) {
-                    return $currentNode;
-                }
-                $subgraph = $this->contentRepositoryRegistry->subgraphForNode($currentNode);
-
-                $currentNode = $subgraph->findParentNode($currentNode->aggregateId);
+        $subgraph = $this->contentRepositoryRegistry->subgraphForNode($node);
+        $currentNode = $subgraph->findParentNode($node->aggregateId);
+        while ($currentNode !== null) {
+            if ($this->isFulltextRoot($currentNode)) {
+                return $currentNode;
             }
-        } catch (NodeException $exception) {
-            return null;
+            $currentNode = $subgraph->findParentNode($currentNode->aggregateId);
         }
 
         return null;
@@ -326,9 +287,9 @@ class NodeIndexer extends AbstractNodeIndexer
      * root (e.g. FAQ entries), which have no route of their own.
      *
      * @param Node $node
-     * @return UriInterface|null
+     * @return string|null
      */
-    protected function getNodeUri(Node $node): ?UriInterface
+    protected function getNodeUri(Node $node): ?string
     {
         if (!$this->isDocument($node)) {
             return null;

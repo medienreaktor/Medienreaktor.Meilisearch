@@ -4,17 +4,12 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Domain\Service;
 
-use Medienreaktor\Meilisearch\Domain\Service\RequestService;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
-use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\Flow\Annotations as Flow;
+use Neos\Flow\Mvc\Exception\NoMatchingRouteException;
 use Neos\Neos\FrontendRouting\NodeUriBuilderFactory;
 use Neos\Neos\FrontendRouting\Options;
-use Neos\Neos\Service\LinkingService;
-use Neos\Eel\FlowQuery\FlowQuery;
-use Neos\ContentRepository\Domain\Service\Context;
-use Psr\Http\Message\UriInterface;
 
 /**
  * Get links from nodes in the CLI
@@ -24,9 +19,9 @@ use Psr\Http\Message\UriInterface;
 class NodeLinkService
 {
     /**
-    * @Flow\Inject
-    * @var RequestService
-    */
+     * @Flow\Inject
+     * @var RequestService
+     */
     protected $requestService;
 
     /**
@@ -35,19 +30,41 @@ class NodeLinkService
      */
     protected $nodeUriBuilderFactory;
 
-
     /**
-     * Get the node uri
+     * The public URI of a document node: absolute when its site has an active primary
+     * domain, otherwise relative.
+     *
+     * Only documents have a route. A node that cannot be routed throws rather than
+     * returning null, so that a broken document is noticed instead of being indexed
+     * without a URI.
      *
      * @param Node $node
-     * @return string|null
+     * @return string|null Null for a node that is not below a site
+     * @throws NoMatchingRouteException
      */
-    public function getNodeUri(Node $node): ?UriInterface
+    public function getNodeUri(Node $node): ?string
     {
-        $actionRequest = $this->requestService->createActionRequest($node);
-        $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest($actionRequest);
-        $nodeAddress = NodeAddress::fromNode($node);
-        $uri = $nodeUriBuilder->uriFor($nodeAddress, Options::createForceAbsolute());
-        return $uri;
+        if ($this->getSiteNodeFromNode($node) === null) {
+            return null;
+        }
+
+        $options = $this->requestService->getDomain($node) !== ''
+            ? Options::createForceAbsolute()
+            : Options::createEmpty();
+
+        $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest($this->requestService->createActionRequest($node));
+
+        return (string)$nodeUriBuilder->uriFor(NodeAddress::fromNode($node), $options);
+    }
+
+    /**
+     * The site node the given node belongs to; a site node is its own.
+     *
+     * @param Node $node
+     * @return Node|null Null for a node that is not below a site
+     */
+    public function getSiteNodeFromNode(Node $node): ?Node
+    {
+        return $this->requestService->getSiteNode($node);
     }
 }

@@ -9,7 +9,6 @@ use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Neos\ContentRepository\Core\NodeType\NodeType;
 use Neos\ContentRepository\Core\NodeType\NodeTypeManager;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
-use Psr\Http\Message\UriInterface;
 
 /**
  * Looks node types up in the given NodeTypeManager and opens the URI decision to tests.
@@ -28,7 +27,7 @@ final class NodeIndexerWithNodeTypes extends NodeIndexer
         $this->nodeLinkService = $nodeLinkService;
     }
 
-    public function getNodeUri(Node $node): ?UriInterface
+    public function getNodeUri(Node $node): ?string
     {
         return parent::getNodeUri($node);
     }

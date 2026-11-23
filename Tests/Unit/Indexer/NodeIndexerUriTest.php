@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Tests\Unit\Indexer;
 
-use GuzzleHttp\Psr7\Uri;
 use Medienreaktor\Meilisearch\Domain\Service\NodeLinkService;
 use Medienreaktor\Meilisearch\Tests\Unit\Fixtures\NodeIndexerWithNodeTypes;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
@@ -53,7 +52,7 @@ class NodeIndexerUriTest extends TestCase
     public function testADocumentGetsItsUriFromTheLinkService(): void
     {
         $node = $this->createNode('Vendor.Site:Document.Page');
-        $uri = new Uri('https://example.com/page');
+        $uri = 'https://example.com/page';
 
         $nodeLinkService = $this->createMock(NodeLinkService::class);
         $nodeLinkService->expects(self::once())->method('getNodeUri')->with($node)->willReturn($uri);

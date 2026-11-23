@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No "implicitly nullable parameter" deprecations on PHP 8.4:
   `IndexFactory::create()`, `RequestService::createActionRequest()` and
   `NodeIndexer::extractPropertiesAndFulltext()` declare their nullable parameters.
+- `__uri` is relative when the node's site has no active primary domain, as on the
+  Neos 8 line. It was always forced absolute, so such sites indexed
+  `http://domain.dummy/...`. Reindex to get the corrected URIs.
+- `RequestService::createActionRequest()` without a node, as `AssetUri.build()`
+  calls it, no longer fails on a null node.
+- `NodeLinkService` and `RequestService` no longer reference Neos 8 classes
+  (`Neos\ContentRepository\Domain\Service\Context`, `NodeInterface`).
+
+### Changed
+
+- `NodeLinkService::getNodeUri()` returns the URI as a string, as on the Neos 8 line,
+  instead of a `UriInterface`; `__uri` holds the same value as before.
+
+### Added
+
+- `RequestService::getSiteNode()`, `RequestService::getControllerContext()` and
+  `NodeLinkService::getSiteNodeFromNode()`, as on the Neos 8 line.
 
 ## [3.1.0] - 2026-11-18
 
