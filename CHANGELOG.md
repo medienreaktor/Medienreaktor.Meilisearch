@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `nodeindex:deleteindex` deletes the index itself, settings included, as on the
+  Neos 8 line; `nodeindex:flush` still only removes the documents.
+- `search()` and `deleteIndex()` are declared on `IndexInterface`. The query builder
+  called `search()` through the interface although only the implementation had it.
 - `RequestService::getSiteNode()`, `RequestService::getControllerContext()` and
   `NodeLinkService::getSiteNodeFromNode()`, as on the Neos 8 line.
 

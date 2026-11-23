@@ -4,26 +4,18 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Command;
 
-use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Exception;
 use Medienreaktor\Meilisearch\Indexer\CatchUp\IndexCatchUpOutcome;
 use Medienreaktor\Meilisearch\Indexer\CatchUp\IndexCatchUpService;
+use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Medienreaktor\Meilisearch\Indexer\WorkspaceIndexer;
-use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
-use Neos\ContentRepository\Core\NodeType\NodeTypeName;
-use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
-use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
-use Neos\ContentRepository\Core\Projection\ContentGraph\NodeAggregate;
-use Neos\ContentRepository\Core\Projection\ContentGraph\VisibilityConstraints;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
-use Neos\ContentRepository\Search\Exception\IndexingException;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Annotations\Inject;
 use Neos\Flow\Cli\CommandController;
-use Ramsey\Uuid\Exception\NodeException;
 
 /**
  * CLI commands for index building and flushing
@@ -86,10 +78,29 @@ class NodeIndexCommandController extends CommandController
         };
     }
 
+    /**
+     * Create the index and apply its settings
+     *
+     * @return void
+     */
     public function createIndexCommand(): void
     {
         $this->indexClient->createIndex();
-        $this->outputLine('Created and update settings of index');
+        $this->outputLine('Index created successfully.');
+    }
+
+    /**
+     * Delete the index
+     *
+     * Removes the index itself, settings included, rather than only its documents
+     * (see nodeindex:flush). Run nodeindex:createindex or nodeindex:build afterwards.
+     *
+     * @return void
+     */
+    public function deleteIndexCommand(): void
+    {
+        $this->indexClient->deleteIndex();
+        $this->outputLine('The index has been deleted.');
     }
 
     /**
@@ -192,28 +203,5 @@ class NodeIndexCommandController extends CommandController
         }
         $dimensionSpacePoints = $this->contentRepositoryRegistry->get($contentRepositoryId)->getVariationGraph()->getDimensionSpacePoints();
         return $limit * max(1, $dimensionSpacePoints->count());
-    }
-
-    /**
-     * Whether the node is configured as fulltext root. Copied from AbstractIndexerDriver::isFulltextRoot().
-     *
-     * @param Node $node
-     * @return bool
-     */
-    protected function isFulltextRoot(NodeAggregate $node): bool
-    {
-        $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
-        $nodeType = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
-        if ($nodeType === null) {
-            return false;
-        }
-        if ($nodeType->hasConfiguration('search')) {
-            $searchSettingsForNode = $nodeType->getConfiguration('search');
-            if (isset($searchSettingsForNode['fulltext']['isRoot']) && $searchSettingsForNode['fulltext']['isRoot'] === true) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Domain\Service;
 
+use Meilisearch\Search\SearchResult;
+
 /**
  * Interface IndexInterface
  */
@@ -81,7 +83,23 @@ interface IndexInterface
     public function findAllIdentifiersByIdentifier(string $identifier);
 
     /**
+     * Delete the index itself, documents and settings alike.
+     *
+     * @return void
+     */
+    public function deleteIndex(): void;
+
+    /**
      * @return string
      */
     public function getIndexName(): string;
+
+    /**
+     * Perform a search.
+     *
+     * @param string $query
+     * @param array $parameters Meilisearch search parameters; a list of filter clauses is joined with AND
+     * @return SearchResult
+     */
+    public function search(string $query, array $parameters): SearchResult;
 }

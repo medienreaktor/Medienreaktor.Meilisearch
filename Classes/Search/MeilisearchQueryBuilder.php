@@ -252,9 +252,10 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     }
 
     /**
-     * Execute the query and return the raw results enriched with node information
+     * Execute the query and return the raw hits, each enriched with its resolved
+     * node under `__node` where one could be resolved.
      *
-     * @return \Traversable<Node>
+     * @return \Traversable<int, array<string, mixed>>
      */
     public function executeRaw(): \Traversable
     {
