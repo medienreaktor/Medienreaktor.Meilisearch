@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Search.query(node)` filters on the dimension space point's hash, as indexed in
+  `__dimensionsHash`. It hashed the JSON of the coordinates in their configured order,
+  which differs from the indexed hash whenever that order is not alphabetical, e.g.
+  for sites with more than one dimension.
 - Real-time and catch-up indexing write in batches instead of one deletion and one
   addition per node. `NodeIndexer` implements `BulkNodeIndexerInterface`: inside
   `withBulkProcessing()`, as Neos.ContentRepository.Search drains its queue, `flush()`
@@ -63,6 +67,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The `Dimensions` Eel helper (`Dimensions.hash(dimensions)`,
+  `Dimensions.hashByNode(node)`) and `DimensionsService`, as on the Neos 8 line. On
+  Neos 9 the hash is the dimension space point's own hash, which `__dimensionsHash`
+  already holds; Neos 8 style values lists count with their first value. Documents
+  carry the node's coordinates as `__dimensions` again.
 - `NodeIndexer::indexNode()` takes `$indexAllDimensions` and
   `$indexFallbackDimensions`, as on the Neos 8 line: index every dimension space point
   (default), only the node's origin and those falling back to it, or only the one the

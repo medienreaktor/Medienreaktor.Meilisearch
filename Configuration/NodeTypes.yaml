@@ -24,6 +24,9 @@
     __nodeTypeAndSupertypes:
       search:
         indexing: '${Indexing.extractNodeTypeNamesAndSupertypes(node)}'
+    __dimensions:
+      search:
+        indexing: '${node.dimensionSpacePoint.coordinates}'
     __dimensionsHash:
       search:
         indexing: '${node.dimensionSpacePoint.hash}'

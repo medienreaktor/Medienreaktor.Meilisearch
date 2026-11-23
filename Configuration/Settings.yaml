@@ -12,9 +12,11 @@ Neos:
         Json: Neos\Eel\Helper\JsonHelper
         AssetUri: Medienreaktor\Meilisearch\Eel\AssetUriHelper
         IndexPath: Medienreaktor\Meilisearch\Eel\IndexPathHelper
+        Dimensions: Medienreaktor\Meilisearch\Eel\DimensionsHelper
   Fusion:
     defaultContext:
       IndexPath: Medienreaktor\Meilisearch\Eel\IndexPathHelper
+      Dimensions: Medienreaktor\Meilisearch\Eel\DimensionsHelper
 Medienreaktor:
   Meilisearch:
     # Set to false to leave __fulltext out of the documents, e.g. when documents are

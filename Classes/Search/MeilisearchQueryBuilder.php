@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Search;
 
+use Medienreaktor\Meilisearch\Domain\Service\DimensionsService;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Domain\Service\IndexPathService;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
@@ -32,6 +33,9 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
 
     #[Flow\Inject]
     protected IndexPathService $indexPathService;
+
+    #[Flow\Inject]
+    protected DimensionsService $dimensionsService;
 
     /**
      * The node inside which searching should happen
@@ -425,7 +429,7 @@ class MeilisearchQueryBuilder implements QueryBuilderInterface, ProtectedContext
     {
         $this->contextNode = $contextNode;
 
-        $dimensionsHash = md5($contextNode->dimensionSpacePoint->toJson());
+        $dimensionsHash = $this->dimensionsService->hashByNode($contextNode);
         // The context node itself, or any node below it
         $contextPath = $this->indexPathService->pathOf($contextNode);
         $this->parameters['filter'][] = '(__parentPath = "' . $contextPath . '" OR __path = "' . $contextPath . '")';

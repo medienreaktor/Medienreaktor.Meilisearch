@@ -328,15 +328,18 @@ You can obtain these values in PHP using:
 
 ```php
 $nodePath = $this->indexPathService->pathOf($contextNode); // Medienreaktor\Meilisearch\Domain\Service\IndexPathService
-$dimensionsHash = $contextNode->dimensionSpacePoint->hash;
+$dimensionsHash = $contextNode->dimensionSpacePoint->hash; // or DimensionsService::hashByNode()
 ```
 
 In Fusion, you get these values (assuming `site` is your desired context node) using:
 
 ```
 nodePath = ${IndexPath.of(site)}
-dimensionsHash = ${site.dimensionSpacePoint.hash}
+dimensionsHash = ${Dimensions.hashByNode(site)}
 ```
+
+`Dimensions.hash(dimensions)` takes a dimension space point or its coordinates
+(`{language: 'de'}`); `DimensionsService` does the same in PHP.
 
 `IndexPath.parents(node)` returns the node's `__parentPath` values.
 
