@@ -37,7 +37,7 @@ class IndexFactory
      * @return IndexInterface
      * @throws Exception
      */
-    public function create(string $indexName, string $indexType = null): IndexInterface
+    public function create(string $indexName, ?string $indexType = null): IndexInterface
     {
         if (!isset($indexType)) {
             if ($this->objectManager === null) {

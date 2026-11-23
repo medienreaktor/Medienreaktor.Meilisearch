@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- No "implicitly nullable parameter" deprecations on PHP 8.4:
+  `IndexFactory::create()`, `RequestService::createActionRequest()` and
+  `NodeIndexer::extractPropertiesAndFulltext()` declare their nullable parameters.
+
 ## [3.1.0] - 2026-11-18
 
 ### Added

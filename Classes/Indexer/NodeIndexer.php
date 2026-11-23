@@ -384,7 +384,7 @@ class NodeIndexer extends AbstractNodeIndexer
         return $fulltext;
     }
 
-    protected function extractPropertiesAndFulltext(Node|null $node, array &$fulltextData, \Closure $nonIndexedPropertyErrorHandler = null): array
+    protected function extractPropertiesAndFulltext(Node $node, array &$fulltextData, ?\Closure $nonIndexedPropertyErrorHandler = null): array
     {
         $result = parent::extractPropertiesAndFulltext($node, $fulltextData, $nonIndexedPropertyErrorHandler);
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);

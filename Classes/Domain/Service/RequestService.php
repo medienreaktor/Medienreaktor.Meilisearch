@@ -84,7 +84,7 @@ class RequestService
      * @param string|Node|null $value
      * @return ActionRequest
      */
-    public function createActionRequest(string|Node $value = null): ActionRequest
+    public function createActionRequest(string|Node|null $value = null): ActionRequest
     {
         $domain = null;
         if (is_string($value)) {
