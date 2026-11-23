@@ -7,7 +7,6 @@ namespace Medienreaktor\Meilisearch\Indexer;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Domain\Service\NodeLinkService;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
-use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePointSet;
 use Neos\ContentRepository\Core\NodeType\NodeType;
 use Neos\ContentRepository\Core\Projection\ContentGraph\ContentSubgraphInterface;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
@@ -135,29 +134,49 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
     }
 
     /**
-     * Add or update a node in the index with all its dimension variants.
+     * Add or update a node in the index.
      *
-     * The node's fulltext root is indexed, e.g. the page a content element is on.
-     * Writes are buffered; flush() says when they reach the index.
+     * The node's fulltext root is indexed, e.g. the page a content element is on. By
+     * default in every dimension space point; $indexAllDimensions = false limits it to
+     * the node's origin and the dimension space points that fall back to it (where the
+     * node shines through), and additionally $indexFallbackDimensions = false to the
+     * dimension space point the node was read in. Writes are buffered; flush() says
+     * when they reach the index.
      *
      * @param Node $node
      * @param WorkspaceName|null $targetWorkspaceName Ignored: the index holds live content only
+     * @param bool $indexAllDimensions
+     * @param bool $indexFallbackDimensions Only used when not indexing all dimensions
      * @return void
      */
-    public function indexNode(Node $node, ?WorkspaceName $targetWorkspaceName = null): void
-    {
+    public function indexNode(
+        Node $node,
+        ?WorkspaceName $targetWorkspaceName = null,
+        bool $indexAllDimensions = true,
+        bool $indexFallbackDimensions = true
+    ): void {
         $node = $this->findFulltextRoot($node);
         if ($node === null) {
             return;
         }
 
-        $this->bufferIdentifierDeletion($node->aggregateId->value);
-
-        $dimensionSpacePoints = $this->calculateDimensionCombinations($node);
-        if ($dimensionSpacePoints->isEmpty()) {
-            $dimensionSpacePoints = [DimensionSpacePoint::createWithoutDimensions()];
+        $variationGraph = $this->contentRepositoryRegistry->get($node->contentRepositoryId)->getVariationGraph();
+        if ($indexAllDimensions) {
+            $this->bufferIdentifierDeletion($node->aggregateId->value);
+            $dimensionSpacePoints = $variationGraph->getDimensionSpacePoints();
+            if ($dimensionSpacePoints->isEmpty()) {
+                $dimensionSpacePoints = [DimensionSpacePoint::createWithoutDimensions()];
+            }
+        } elseif ($indexFallbackDimensions) {
+            $dimensionSpacePoints = $variationGraph->getSpecializationSet($node->originDimensionSpacePoint->toDimensionSpacePoint());
+        } else {
+            $dimensionSpacePoints = [$node->dimensionSpacePoint];
         }
+
         foreach ($dimensionSpacePoints as $dimensionSpacePoint) {
+            if (!$indexAllDimensions) {
+                $this->bufferDocumentDeletion($this->generateDocumentIdentifier($node->aggregateId->value, $dimensionSpacePoint->hash));
+            }
             $document = $this->extractNodeVariant($node, $dimensionSpacePoint);
             if ($document !== null) {
                 $this->bufferDocument($document);
@@ -566,19 +585,6 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
         return $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
     }
 
-    /**
-     * Calculate all dimension combinations from presets.
-     *
-     * @return DimensionSpacePointSet
-     *
-     */
-    protected function calculateDimensionCombinations(Node $node): DimensionSpacePointSet
-    {
-        $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
-        $dimensions = $contentRepository->getVariationGraph()->getDimensionSpacePoints();
-        return $dimensions;
-    }
-
     protected function truncateFulltext(array $fulltext): array
     {
         foreach ($fulltext as $key => $value) {
@@ -654,8 +660,11 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
      */
     protected function generateUniqueNodeIdentifier(Node $node): string
     {
-        $nodeIdentifier = (string)$node->aggregateId;
-        $dimensionsHash = $node->dimensionSpacePoint->hash;
+        return $this->generateDocumentIdentifier($node->aggregateId->value, $node->dimensionSpacePoint->hash);
+    }
+
+    protected function generateDocumentIdentifier(string $nodeIdentifier, string $dimensionsHash): string
+    {
         return $nodeIdentifier . '_' . $dimensionsHash;
     }
 }

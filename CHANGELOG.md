@@ -63,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `NodeIndexer::indexNode()` takes `$indexAllDimensions` and
+  `$indexFallbackDimensions`, as on the Neos 8 line: index every dimension space point
+  (default), only the node's origin and those falling back to it, or only the one the
+  node was read in.
 - `nodeindex:build --wait [--timeout <seconds>]` returns only once Meilisearch has no
   unfinished task for the index and fails if a task of the run failed;
   `--assume-empty-index` skips deletions on an index the caller has just emptied.
