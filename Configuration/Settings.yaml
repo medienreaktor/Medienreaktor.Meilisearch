@@ -17,6 +17,12 @@ Neos:
       IndexPath: Medienreaktor\Meilisearch\Eel\IndexPathHelper
 Medienreaktor:
   Meilisearch:
+    # Set to false to leave __fulltext out of the documents, e.g. when documents are
+    # rendered out of band.
+    enableFulltext: true
+    # Attributes a document must have a non-empty value for; a node lacking one is
+    # removed from the index instead.
+    neededAttributesForIndex: []
     indexing:
       batchSize: 100
       maxFulltextBytes: 500000

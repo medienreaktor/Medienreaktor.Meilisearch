@@ -47,6 +47,18 @@ class NodeIndexer extends AbstractNodeIndexer
     protected $maxFulltextBytes;
 
     /**
+     * @Flow\InjectConfiguration(path="enableFulltext", package="Medienreaktor.Meilisearch")
+     * @var bool
+     */
+    protected $enableFulltext = true;
+
+    /**
+     * @Flow\InjectConfiguration(path="neededAttributesForIndex", package="Medienreaktor.Meilisearch")
+     * @var list<string>
+     */
+    protected $neededAttributesForIndex = [];
+
+    /**
      * @Flow\Inject
      * @var NodeLinkService
      */
@@ -151,21 +163,33 @@ class NodeIndexer extends AbstractNodeIndexer
     }
 
     /**
-     * @return array<string, mixed>
+     * The node's document, or null when it lacks one of the attributes configured in
+     * `neededAttributesForIndex`. Callers remove the node's previous documents before
+     * adding new ones, so a node that loses such an attribute leaves the index.
+     *
+     * @return array<string, mixed>|null
      */
-    protected function extractDocument(Node $node): array
+    protected function extractDocument(Node $node): ?array
     {
         $fulltext = [];
 
         $document = $this->extractPropertiesAndFulltext($node, $fulltext);
         $document['id'] = $this->generateUniqueNodeIdentifier($node);
-        $document['__fulltext'] = $this->truncateFulltext($fulltext);
+        if ($this->enableFulltext) {
+            $document['__fulltext'] = $this->truncateFulltext($fulltext);
+        }
         $document['title'] = $node->getProperty("title");
         $document['__uri'] = $this->getNodeUri($node);
 
         if (array_key_exists('__geo', $document)) {
             $document['_geo'] = $document['__geo'];
             unset($document['__geo']);
+        }
+
+        foreach ($this->neededAttributesForIndex as $attribute) {
+            if (empty($document[$attribute])) {
+                return null;
+            }
         }
 
         return $document;
@@ -184,8 +208,9 @@ class NodeIndexer extends AbstractNodeIndexer
         $documents = [];
         foreach ($contentRepository->getVariationGraph()->getDimensionSpacePoints() as $dimensionSpacePoint) {
             $node = $contentGraph->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved())->findNodeById($nodeAggregateId);
-            if ($node !== null) {
-                $documents[] = $this->extractDocument($node);
+            $document = $node !== null ? $this->extractDocument($node) : null;
+            if ($document !== null) {
+                $documents[] = $document;
             }
         }
 
@@ -348,6 +373,10 @@ class NodeIndexer extends AbstractNodeIndexer
     protected function extractPropertiesAndFulltext(Node $node, array &$fulltextData, ?\Closure $nonIndexedPropertyErrorHandler = null): array
     {
         $result = parent::extractPropertiesAndFulltext($node, $fulltextData, $nonIndexedPropertyErrorHandler);
+        if (!$this->enableFulltext) {
+            return $result;
+        }
+
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
         $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($node->dimensionSpacePoint, VisibilityConstraints::createEmpty());
         $filter = FindChildNodesFilter::create(nodeTypes: 'Neos.Neos:Content,Neos.Neos:ContentCollection');

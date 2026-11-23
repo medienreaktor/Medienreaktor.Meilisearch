@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `enableFulltext: false` leaves `__fulltext` out of the documents, and
+  `neededAttributesForIndex` lists attributes without which a node is removed from
+  the index instead of indexed. Both as on the Neos 8 line.
 - `MeilisearchIndex::updateCustomSettings()` replaces and applies an index's
   settings, for custom indices with settings of their own, and
   `findAllIdentifiersByIdentifierAndDimensionsHash()` lists a node's documents in one
