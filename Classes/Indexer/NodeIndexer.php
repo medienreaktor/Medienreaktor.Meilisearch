@@ -7,6 +7,7 @@ namespace Medienreaktor\Meilisearch\Indexer;
 use Medienreaktor\Meilisearch\Domain\Service\IndexInterface;
 use Medienreaktor\Meilisearch\Domain\Service\NodeLinkService;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
+use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePointSet;
 use Neos\ContentRepository\Core\NodeType\NodeType;
 use Neos\ContentRepository\Core\Projection\ContentGraph\ContentSubgraphInterface;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
@@ -164,7 +165,7 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
         $variationGraph = $this->contentRepositoryRegistry->get($node->contentRepositoryId)->getVariationGraph();
         if ($indexAllDimensions) {
             $this->bufferIdentifierDeletion($node->aggregateId->value);
-            $dimensionSpacePoints = $variationGraph->getDimensionSpacePoints();
+            $dimensionSpacePoints = $this->calculateDimensionCombinations($node);
             if ($dimensionSpacePoints->isEmpty()) {
                 $dimensionSpacePoints = [DimensionSpacePoint::createWithoutDimensions()];
             }
@@ -278,7 +279,9 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
         $this->bufferIdentifierDeletion($nodeAggregateId->value);
         foreach ($contentRepository->getVariationGraph()->getDimensionSpacePoints() as $dimensionSpacePoint) {
             $node = $contentGraph->getSubgraph($dimensionSpacePoint, self::visibilityConstraints())->findNodeById($nodeAggregateId);
-            $document = $node !== null ? $this->extractDocument($node) : null;
+            // Through extractNodeVariant(), as every other path, so that what overrides or
+            // advises it decides about catch-up documents too.
+            $document = $node !== null ? $this->extractNodeVariant($node, $dimensionSpacePoint) : null;
             if ($document !== null) {
                 $this->bufferDocument($document);
             }
@@ -332,13 +335,31 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
      */
     public function flush(?string $targetIndexName = null): void
     {
-        $this->switchTargetIndex($targetIndexName);
         if ($this->bulkProcessingDepth > 0) {
+            $this->switchTargetIndex($targetIndexName);
             $this->flushIfBufferIsFull();
             return;
         }
 
+        $this->flushBuffer($targetIndexName);
+    }
+
+    /**
+     * Writes everything buffered, into the given index or the live one.
+     */
+    protected function flushBuffer(?string $targetIndexName = null): void
+    {
+        $this->switchTargetIndex($targetIndexName);
         $this->writeBuffer();
+    }
+
+    /**
+     * The dimension space points a node is indexed in when indexNode() covers all of
+     * them: every one of the content repository's.
+     */
+    protected function calculateDimensionCombinations(Node $node): DimensionSpacePointSet
+    {
+        return $this->contentRepositoryRegistry->get($node->contentRepositoryId)->getVariationGraph()->getDimensionSpacePoints();
     }
 
     /**
@@ -597,8 +618,11 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
         return $fulltext;
     }
 
-    protected function extractPropertiesAndFulltext(Node $node, array &$fulltextData, ?\Closure $nonIndexedPropertyErrorHandler = null): array
+    protected function extractPropertiesAndFulltext(?Node $node, array &$fulltextData, ?\Closure $nonIndexedPropertyErrorHandler = null): array
     {
+        if ($node === null) {
+            return [];
+        }
         $result = parent::extractPropertiesAndFulltext($node, $fulltextData, $nonIndexedPropertyErrorHandler);
         if (!$this->enableFulltext) {
             return $result;

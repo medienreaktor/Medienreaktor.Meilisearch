@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `nodeindex:catchup` builds its documents through `NodeIndexer::extractNodeVariant()`,
+  as `nodeindex:build` and real-time indexing do, so an override or aspect that
+  leaves nodes out of the index (returning null there) applies to it too. It wrote
+  them past that method, so such nodes were indexed until the next rebuild.
 - `execute()` returns the nodes it found. It looked hits up by `__path` as a path of
   node names, which a path of aggregate ids is not, and so returned nothing; hits are
   resolved by `__aggregateId` now.

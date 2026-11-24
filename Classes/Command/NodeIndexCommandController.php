@@ -10,6 +10,7 @@ use Medienreaktor\Meilisearch\Indexer\CatchUp\IndexCatchUpOutcome;
 use Medienreaktor\Meilisearch\Indexer\CatchUp\IndexCatchUpService;
 use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
 use Medienreaktor\Meilisearch\Indexer\WorkspaceIndexer;
+use Neos\ContentRepository\Core\Projection\ContentGraph\NodeAggregate;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
@@ -261,5 +262,20 @@ class NodeIndexCommandController extends CommandController
         }
         $dimensionSpacePoints = $this->contentRepositoryRegistry->get($contentRepositoryId)->getVariationGraph()->getDimensionSpacePoints();
         return $limit * max(1, $dimensionSpacePoints->count());
+    }
+
+    /**
+     * Whether the node type of the aggregate is configured as a fulltext root.
+     */
+    protected function isFulltextRoot(NodeAggregate $node): bool
+    {
+        $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
+        $nodeType = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName);
+        if ($nodeType === null) {
+            return false;
+        }
+        $search = $nodeType->getConfiguration('search');
+
+        return is_array($search) && ($search['fulltext']['isRoot'] ?? false) === true;
     }
 }
