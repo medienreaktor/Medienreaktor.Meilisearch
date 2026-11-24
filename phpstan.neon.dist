@@ -10,7 +10,9 @@ parameters:
     paths:
         - Classes
         - Tests
-    # The package declares php ^8.0, so analyse against that floor rather than the
-    # interpreter in use — otherwise 8.2-only syntax passes locally and breaks the
-    # oldest supported target.
-    phpVersion: 80000
+    # The second place the PHP floor is pinned, beside require.php ^8.1 in
+    # composer.json; change both together. CI would not need it, since the lint
+    # job runs on the floor. It is for local runs: the package is developed in
+    # a project's DistributionPackages.local, inside that project's DDEV, on the
+    # project's PHP - and must still be analysed against its own oldest target.
+    phpVersion: 80100
