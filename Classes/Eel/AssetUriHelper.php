@@ -55,7 +55,7 @@ class AssetUriHelper implements ProtectedContextAwareInterface
         $allowCropping = true,
         $allowUpScaling = true,
         $format = null
-    ): ?string {
+    ) {
         if (!$value instanceof AssetInterface) {
             return null;
         }
@@ -97,7 +97,7 @@ class AssetUriHelper implements ProtectedContextAwareInterface
      * @param string $methodName
      * @return boolean
      */
-    public function allowsCallOfMethod($methodName): bool
+    public function allowsCallOfMethod($methodName)
     {
         return true;
     }

@@ -219,14 +219,14 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
      * Extract node variant properties and fulltext for a given dimension space point
      *
      * @param Node $node
-     * @param DimensionSpacePoint $dimensionSpacePoint
+     * @param DimensionSpacePoint $dimensionCombination
      * @return array<string, mixed>|null Null when the node is not visible there
      */
-    protected function extractNodeVariant(Node $node, DimensionSpacePoint $dimensionSpacePoint): ?array
+    protected function extractNodeVariant(Node $node, DimensionSpacePoint $dimensionCombination): ?array
     {
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
 
-        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($dimensionSpacePoint, self::visibilityConstraints());
+        $subgraph = $contentRepository->getContentGraph(WorkspaceName::forLive())->getSubgraph($dimensionCombination, self::visibilityConstraints());
         $node = $subgraph->findNodeById($node->aggregateId);
 
         return $node !== null ? $this->extractDocument($node) : null;
