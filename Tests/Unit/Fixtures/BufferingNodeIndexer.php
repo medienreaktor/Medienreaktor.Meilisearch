@@ -13,7 +13,7 @@ use Medienreaktor\Meilisearch\Indexer\NodeIndexer;
  */
 final class BufferingNodeIndexer extends NodeIndexer
 {
-    public function __construct(IndexInterface $indexClient, int $batchSize)
+    public function __construct(IndexInterface $indexClient, ?int $batchSize)
     {
         $this->indexClient = $indexClient;
         $this->batchSize = $batchSize;
@@ -36,5 +36,23 @@ final class BufferingNodeIndexer extends NodeIndexer
     {
         $this->bufferDocumentDeletion($documentIdentifier);
         $this->flushIfBufferIsFull();
+    }
+
+    /**
+     * @param array<string, mixed> $document
+     */
+    public function bufferDocument(array $document): void
+    {
+        parent::bufferDocument($document);
+    }
+
+    public function bufferDocumentDeletion(string $documentIdentifier): void
+    {
+        parent::bufferDocumentDeletion($documentIdentifier);
+    }
+
+    public function bufferIdentifierDeletion(string $nodeAggregateId): void
+    {
+        parent::bufferIdentifierDeletion($nodeAggregateId);
     }
 }

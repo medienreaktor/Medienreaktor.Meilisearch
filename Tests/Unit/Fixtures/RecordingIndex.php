@@ -20,6 +20,11 @@ final class RecordingIndex implements IndexInterface
      */
     public array $calls = [];
 
+    /**
+     * Thrown by every write once set, after the write was recorded.
+     */
+    public ?\Throwable $failWith = null;
+
     public function createIndex(): void
     {
         $this->calls[] = ['createIndex', null, null];
@@ -46,16 +51,19 @@ final class RecordingIndex implements IndexInterface
     public function addDocuments(array $documents, ?string $targetIndexName = null): void
     {
         $this->calls[] = ['addDocuments', $documents, $targetIndexName];
+        $this->failIfAsked();
     }
 
     public function deleteDocuments(array $documents, ?string $targetIndexName = null): void
     {
         $this->calls[] = ['deleteDocuments', $documents, $targetIndexName];
+        $this->failIfAsked();
     }
 
     public function deleteByIdentifiers(array $nodeIdentifiers, ?string $targetIndexName = null): void
     {
         $this->calls[] = ['deleteByIdentifiers', $nodeIdentifiers, $targetIndexName];
+        $this->failIfAsked();
     }
 
     public function waitForPendingTasks(int $timeoutInSeconds): void
@@ -69,6 +77,7 @@ final class RecordingIndex implements IndexInterface
     public function deleteByFilter(array|string $filter, ?string $targetIndexName = null): void
     {
         $this->calls[] = ['deleteByFilter', $filter, $targetIndexName];
+        $this->failIfAsked();
     }
 
     public function findAllIdentifiersByIdentifier(string $identifier)
@@ -88,6 +97,27 @@ final class RecordingIndex implements IndexInterface
     public function search(string $query, array $parameters): SearchResult
     {
         throw new \LogicException('Searching is not part of what this double stands in for.', 1787000201);
+    }
+
+    /**
+     * The argument of the first recorded call to the given method.
+     */
+    public function argumentOf(string $method): mixed
+    {
+        foreach ($this->calls as $call) {
+            if ($call[0] === $method) {
+                return $call[1];
+            }
+        }
+
+        throw new \LogicException(sprintf('No call to %s() was recorded.', $method), 1787000202);
+    }
+
+    private function failIfAsked(): void
+    {
+        if ($this->failWith !== null) {
+            throw $this->failWith;
+        }
     }
 
     /**
