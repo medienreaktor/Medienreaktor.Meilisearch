@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Tests\Unit\Domain\Service;
 
+use Meilisearch\Exceptions\ApiException;
+use GuzzleHttp\Psr7\Response;
 use Medienreaktor\Meilisearch\Domain\Service\MeilisearchIndex;
 use Medienreaktor\Meilisearch\Exception;
 use Medienreaktor\Meilisearch\Tests\Unit\Fixtures\RecordingHttpClient;
@@ -105,6 +107,16 @@ class MeilisearchIndexTest extends TestCase
             ['numberOfDocuments' => $documentCount, 'isIndexing' => false, 'fieldDistribution' => []],
             ['embedders' => $embedders],
         ];
+    }
+
+    private function errorResponse(int $status, string $code): Response
+    {
+        return new Response($status, ['Content-Type' => 'application/json'], (string) json_encode([
+            'message' => 'Simulated error',
+            'code' => $code,
+            'type' => 'invalid_request',
+            'link' => 'https://docs.meilisearch.com/errors#' . $code,
+        ]));
     }
 
     /**
@@ -403,6 +415,38 @@ class MeilisearchIndexTest extends TestCase
         $index->createIndex();
 
         self::assertSame($settings, $this->settingsUpdate());
+    }
+
+    public function testCreateIndexAppliesEmbeddersToAnIndexThatDoesNotExistYet(): void
+    {
+        $settings = ['embedders' => ['default' => $this->embedder('{{doc.__markdown}}', 'new-key')]];
+        $index = $this->indexWithSettings($settings);
+        $this->transport->responses = [$this->errorResponse(404, 'index_not_found')];
+
+        $index->createIndex();
+
+        self::assertSame($settings, $this->settingsUpdate());
+    }
+
+    /**
+     * A failed look at the server says nothing about the documents the index holds,
+     * so the settings are not sent at all rather than sent unchecked.
+     */
+    public function testCreateIndexSendsNoSettingsWhenTheServerCannotBeAsked(): void
+    {
+        $index = $this->indexWithSettings(['embedders' => ['default' => $this->embedder('{{doc.__markdown}}', 'new-key')]]);
+        $this->transport->responses = [$this->errorResponse(503, 'internal')];
+
+        try {
+            $index->createIndex();
+            self::fail('The failed request was swallowed.');
+        } catch (ApiException $exception) {
+            self::assertSame(503, $exception->httpStatus);
+        }
+
+        foreach ($this->transport->requests as $request) {
+            self::assertNotSame('PATCH', $request->getMethod(), 'Settings were sent although the server could not be asked.');
+        }
     }
 
     /**

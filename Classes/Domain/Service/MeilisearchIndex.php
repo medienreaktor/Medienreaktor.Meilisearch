@@ -486,6 +486,11 @@ class MeilisearchIndex implements IndexInterface
             $embedders = $this->index->getSettings()['embedders'] ?? [];
             $liveEmbedders = $embedders instanceof \Traversable ? iterator_to_array($embedders) : (array) $embedders;
         } catch (ApiException $exception) {
+            if ($exception->errorCode !== 'index_not_found') {
+                // Whether the index holds documents is unknown, so nothing that might
+                // re-embed them is sent.
+                throw $exception;
+            }
             // The index does not exist yet, so nothing has been embedded that a
             // settings update could throw away.
             return $settings;

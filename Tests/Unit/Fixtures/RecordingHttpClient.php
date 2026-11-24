@@ -28,9 +28,10 @@ final class RecordingHttpClient implements ClientInterface
     public array $requests = [];
 
     /**
-     * Response bodies to answer with, in order, before falling back to the default.
+     * What to answer with, in order, before falling back to the default: a body,
+     * answered with 200, or a response handed out as it is, for an error status.
      *
-     * @var list<array<string, mixed>>
+     * @var list<array<string, mixed>|ResponseInterface>
      */
     public array $responses = [];
 
@@ -39,7 +40,12 @@ final class RecordingHttpClient implements ClientInterface
         $this->requests[] = $request;
 
         if ($this->responses !== []) {
-            return new Response(200, ['Content-Type' => 'application/json'], (string) json_encode(array_shift($this->responses)));
+            $response = array_shift($this->responses);
+            if ($response instanceof ResponseInterface) {
+                return $response;
+            }
+
+            return new Response(200, ['Content-Type' => 'application/json'], (string) json_encode($response));
         }
 
         return new Response(202, ['Content-Type' => 'application/json'], (string) json_encode([
