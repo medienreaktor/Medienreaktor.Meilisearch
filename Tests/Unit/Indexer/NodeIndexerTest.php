@@ -132,6 +132,18 @@ class NodeIndexerTest extends TestCase
     }
 
     /**
+     * The limit is in bytes, and a character is not split.
+     */
+    public function testMultibyteFulltextIsCutToTheByteLimit(): void
+    {
+        $document = $this->indexer([], ['text' => str_repeat('ä', 8)], maxFulltextBytes: 7)
+            ->extractDocument($this->createNode('Vendor.Site:Content.FaqEntry'));
+
+        self::assertNotNull($document);
+        self::assertSame('äää', $document['__fulltext']['text']);
+    }
+
+    /**
      * Meilisearch reads coordinates from `_geo` only; a node type can only name a
      * property `__geo`.
      */

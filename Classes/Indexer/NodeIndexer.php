@@ -612,7 +612,9 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
     {
         foreach ($fulltext as $key => $value) {
             if (is_string($value) && strlen($value) > $this->maxFulltextBytes) {
-                $fulltext[$key] = mb_substr($value, 0, $this->maxFulltextBytes);
+                // Cut by bytes, at a character boundary: the limit is on the size of the
+                // document, which umlauts and the like would otherwise exceed.
+                $fulltext[$key] = mb_strcut($value, 0, $this->maxFulltextBytes, 'UTF-8');
             }
         }
         return $fulltext;

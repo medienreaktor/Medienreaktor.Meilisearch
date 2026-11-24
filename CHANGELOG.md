@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `indexing.maxFulltextBytes` limits fulltext to that many bytes. The text was cut to
+  that many characters, so text with umlauts and other non-ASCII characters stayed up to
+  four times over the limit.
 - `__sortIndex` holds the node's position among its siblings. It read `node.index`,
   which Neos 9 nodes do not have, and was null on every document. Reindex to fill it.
 - `nodeindex:catchup` builds its documents through `NodeIndexer::extractNodeVariant()`,
