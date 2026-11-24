@@ -17,7 +17,7 @@
     },
     "require-dev": {
         "kleisli/flow-phpstan": "^1.0",
-        "phpunit/phpunit": "^9.6 || ^10.5 || ^11.5",
+        "phpunit/phpunit": "^9.6 || ^10.5 || ^11.5 || ^13.0",
         "phpstan/phpstan": "^2.2",
         "squizlabs/php_codesniffer": "^4.0"
     },
