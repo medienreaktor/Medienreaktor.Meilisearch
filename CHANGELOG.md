@@ -9,6 +9,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-11-24
+
+A project that configures and calls the package needs no changes. Code that implements
+`IndexInterface` itself has to add the methods it gained and accept a string filter in
+`deleteByFilter()` (see Added), and a subclass that overrides
+`NodeIndexer::indexNode()` or `MeilisearchQueryBuilder::vector()` their new optional
+parameters. Run `nodeindex:rebuild` once after updating to pick up the indexing fixes:
+hidden pages leave the index, `_hidden`, `_hiddenInIndex`, `__uri` and `__sortIndex`
+are filled correctly, and thumbnail URIs are stable.
+
+### Added
+
+- `indexing.allowReembedding` (default `false`) and `--allow-reembedding` on
+  `nodeindex:createindex` and `nodeindex:build`, to apply embedder changes that
+  re-embed the index on purpose. As on the Neos 8 line (2.14.0).
+- The `Meilisearch` Eel helper for frontend tenant tokens
+  (`Meilisearch.tenantToken()`, `searchRules()`, `frontendFilter()`) with the settings
+  `client.readonlyApiKey`, `client.readonlyApiKeyUid` and `tenantToken.expiresIn`
+  (0, the default, for tokens without expiry), as on the Neos 8 line. On Neos 9 the
+  dimensions argument is a dimension space point or its coordinates instead of
+  `site.context.dimensions`; `[]` uses the site node's own.
+- The `Dimensions` Eel helper (`Dimensions.hash(dimensions)`,
+  `Dimensions.hashByNode(node)`) and `DimensionsService::hash()` and `hashByNode()`,
+  as on the Neos 8 line. The Neos 8 line's dimension combinations have no
+  counterpart: the content repository's variation graph replaces them. On Neos 9 the
+  hash is the dimension space point's own hash, which `__dimensionsHash`
+  already holds; Neos 8 style values lists count with their first value. Documents
+  carry the node's coordinates as `__dimensions` again.
+- `NodeIndexer::indexNode()` takes `$indexAllDimensions` and
+  `$indexFallbackDimensions`, as on the Neos 8 line: index every dimension space point
+  (default), only the node's origin and those falling back to it, or only the one the
+  node was read in.
+- `nodeindex:build --wait [--timeout <seconds>]` returns only once Meilisearch has no
+  unfinished task for the index and fails if a task of the run failed;
+  `--assume-empty-index` skips deletions on an index the caller has just emptied.
+  `IndexInterface` gains `deleteByIdentifiers()` and `waitForPendingTasks()` for them.
+  As on the Neos 8 line (2.11.0).
+- `enableFulltext: false` leaves `__fulltext` out of the documents, and
+  `neededAttributesForIndex` lists attributes without which a node is removed from
+  the index instead of indexed. Both as on the Neos 8 line.
+- `MeilisearchIndex::updateCustomSettings()` replaces and applies an index's
+  settings, for custom indices with settings of their own, and
+  `findAllIdentifiersByIdentifierAndDimensionsHash()` lists a node's documents in one
+  dimension space point. `deleteByFilter()` also takes Meilisearch's options array
+  (`['filter' => '...']`) and ignores an empty filter instead of sending it. All as on
+  the Neos 8 line.
+- `executeWithoutProcessing()` returns the raw hits without resolving nodes, and
+  `executeRaw()` returns asset documents written into the same index (`__isAsset`, or
+  an `__path` containing `assets`) instead of failing on their missing
+  `__aggregateId`. Both as on the Neos 8 line.
+- `distinct(attribute)` on the query builder, as on the Neos 8 line.
+- `hybrid(searchTerm, {embedder, semanticRatio})` on the query builder combines
+  keyword and vector search (Meilisearch 1.6 or newer with an embedder).
+- The `IndexPath` Eel helper and `IndexPathService` for path filters outside the query
+  builder: `IndexPath.of(node)` is the node's own path, the `__path` of its children;
+  `IndexPath.below(node)` and `IndexPath.selfAndBelow(node)` are ready-made filters
+  for its subtree, without and with the node itself. In PHP, `pathOf()`,
+  `belowFilter()` and `selfAndBelowFilter()`. The indexed `__path` and `__parentPath`
+  are unchanged.
+- `vector()` also takes a search term and options, as on the Neos 8 line:
+  `vector(searchTerm, {embedder, semanticRatio})` searches through a Meilisearch
+  embedder configured in `settings.embedders`. `vector(array $vector)` with a
+  precomputed vector works as before.
+- `nodeindex:deleteindex` deletes the index itself, settings included, as on the
+  Neos 8 line; `nodeindex:flush` still only removes the documents.
+- `search()` and `deleteIndex()` are declared on `IndexInterface`. The query builder
+  called `search()` through the interface although only the implementation had it.
+- `RequestService::getSiteNode()`, `RequestService::getControllerContext()` and
+  `NodeLinkService::getSiteNodeFromNode()`, as on the Neos 8 line.
+
+### Changed
+
+- The 3.x line is developed on `main` now; the `neos9` branch is gone. The Neos 8
+  line, 2.x, continues on `neos8`.
+
 ### Fixed
 
 - Applying settings no longer re-embeds a whole index as a side effect. Meilisearch
@@ -73,66 +148,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   calls it, no longer fails on a null node.
 - `NodeLinkService` and `RequestService` no longer reference Neos 8 classes
   (`Neos\ContentRepository\Domain\Service\Context`, `NodeInterface`).
-
-### Added
-
-- `indexing.allowReembedding` (default `false`) and `--allow-reembedding` on
-  `nodeindex:createindex` and `nodeindex:build`, to apply embedder changes that
-  re-embed the index on purpose. As on the Neos 8 line (2.14.0).
-- The `Meilisearch` Eel helper for frontend tenant tokens
-  (`Meilisearch.tenantToken()`, `searchRules()`, `frontendFilter()`) with the settings
-  `client.readonlyApiKey`, `client.readonlyApiKeyUid` and `tenantToken.expiresIn`
-  (0, the default, for tokens without expiry), as on the Neos 8 line. On Neos 9 the
-  dimensions argument is a dimension space point or its coordinates instead of
-  `site.context.dimensions`; `[]` uses the site node's own.
-- The `Dimensions` Eel helper (`Dimensions.hash(dimensions)`,
-  `Dimensions.hashByNode(node)`) and `DimensionsService::hash()` and `hashByNode()`,
-  as on the Neos 8 line. The Neos 8 line's dimension combinations have no
-  counterpart: the content repository's variation graph replaces them. On Neos 9 the
-  hash is the dimension space point's own hash, which `__dimensionsHash`
-  already holds; Neos 8 style values lists count with their first value. Documents
-  carry the node's coordinates as `__dimensions` again.
-- `NodeIndexer::indexNode()` takes `$indexAllDimensions` and
-  `$indexFallbackDimensions`, as on the Neos 8 line: index every dimension space point
-  (default), only the node's origin and those falling back to it, or only the one the
-  node was read in.
-- `nodeindex:build --wait [--timeout <seconds>]` returns only once Meilisearch has no
-  unfinished task for the index and fails if a task of the run failed;
-  `--assume-empty-index` skips deletions on an index the caller has just emptied.
-  `IndexInterface` gains `deleteByIdentifiers()` and `waitForPendingTasks()` for them.
-  As on the Neos 8 line (2.11.0).
-- `enableFulltext: false` leaves `__fulltext` out of the documents, and
-  `neededAttributesForIndex` lists attributes without which a node is removed from
-  the index instead of indexed. Both as on the Neos 8 line.
-- `MeilisearchIndex::updateCustomSettings()` replaces and applies an index's
-  settings, for custom indices with settings of their own, and
-  `findAllIdentifiersByIdentifierAndDimensionsHash()` lists a node's documents in one
-  dimension space point. `deleteByFilter()` also takes Meilisearch's options array
-  (`['filter' => '...']`) and ignores an empty filter instead of sending it. All as on
-  the Neos 8 line.
-- `executeWithoutProcessing()` returns the raw hits without resolving nodes, and
-  `executeRaw()` returns asset documents written into the same index (`__isAsset`, or
-  an `__path` containing `assets`) instead of failing on their missing
-  `__aggregateId`. Both as on the Neos 8 line.
-- `distinct(attribute)` on the query builder, as on the Neos 8 line.
-- `hybrid(searchTerm, {embedder, semanticRatio})` on the query builder combines
-  keyword and vector search (Meilisearch 1.6 or newer with an embedder).
-- The `IndexPath` Eel helper and `IndexPathService` for path filters outside the query
-  builder: `IndexPath.of(node)` is the node's own path, the `__path` of its children;
-  `IndexPath.below(node)` and `IndexPath.selfAndBelow(node)` are ready-made filters
-  for its subtree, without and with the node itself. In PHP, `pathOf()`,
-  `belowFilter()` and `selfAndBelowFilter()`. The indexed `__path` and `__parentPath`
-  are unchanged.
-- `vector()` also takes a search term and options, as on the Neos 8 line:
-  `vector(searchTerm, {embedder, semanticRatio})` searches through a Meilisearch
-  embedder configured in `settings.embedders`. `vector(array $vector)` with a
-  precomputed vector works as before.
-- `nodeindex:deleteindex` deletes the index itself, settings included, as on the
-  Neos 8 line; `nodeindex:flush` still only removes the documents.
-- `search()` and `deleteIndex()` are declared on `IndexInterface`. The query builder
-  called `search()` through the interface although only the implementation had it.
-- `RequestService::getSiteNode()`, `RequestService::getControllerContext()` and
-  `NodeLinkService::getSiteNodeFromNode()`, as on the Neos 8 line.
 
 ## [3.1.0] - 2026-11-18
 
@@ -207,7 +222,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `search.fulltext.excludeChildren` on a node type skips its subtree when building
   the fulltext (released as the untracked tag 2.9.0).
 
-[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.1.0...HEAD
+[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.2.0...HEAD
+[3.2.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.1.0...3.2.0
 [3.1.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.3...3.1.0
 [3.0.3]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.2...3.0.3
 [3.0.2]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.1...3.0.2
