@@ -3,7 +3,7 @@
 # that differs between packages is read from the repository, and a change to
 # this file belongs in the template, from where it reaches every package.
 #
-#   runner            visibility: private -> hetzner, public -> ubuntu-latest
+#   runner            visibility: private -> hetzner, public -> ubuntu-26.04
 #   PHP versions      require.php in composer.json, against PHP_VERSIONS below
 #   PHP extensions    ext-* in composer.json, plus CI_PHP_EXTENSIONS in .env
 #   PHPStan, phpcs    run once Classes/ holds a PHP file
@@ -52,10 +52,12 @@ jobs:
   detect:
     name: Detect
     # Private: the org's runner scale set, a fresh instance per job with the
-    # toolset of GitHub's ubuntu-24.04 runner. Public: GitHub-hosted, because
+    # toolset of GitHub's ubuntu-26.04 runner. Public: GitHub-hosted, because
     # the org runner group does not accept public repositories (a job would queue
-    # forever) and a self-hosted runner must not run fork pull requests.
-    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-latest' }}
+    # forever) and a self-hosted runner must not run fork pull requests. A fixed
+    # release, not ubuntu-latest: the hetzner image is built to match one, and both
+    # sides move to the next together (references/runners.md in the skill).
+    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-26.04' }}
     timeout-minutes: 5
     outputs:
       floor: ${{ steps.php.outputs.floor }}
@@ -141,7 +143,7 @@ jobs:
   lint:
     name: Lint (PHP ${{ needs.detect.outputs.floor }}, highest deps)
     needs: detect
-    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-latest' }}
+    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-26.04' }}
     timeout-minutes: 20
 
     steps:
@@ -189,7 +191,7 @@ jobs:
   test:
     name: Test (PHP ${{ matrix.php }}, ${{ matrix.deps }} deps)
     needs: detect
-    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-latest' }}
+    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-26.04' }}
     timeout-minutes: 20
 
     strategy:
@@ -236,7 +238,7 @@ jobs:
     name: Functional (newest PHP, highest deps)
     needs: detect
     if: needs.detect.outputs.functional == 'true'
-    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-latest' }}
+    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-26.04' }}
     timeout-minutes: 45
 
     # The content repository needs MariaDB or MySQL; on another database its
@@ -341,7 +343,7 @@ jobs:
     name: Frontend
     needs: detect
     if: needs.detect.outputs.frontends != '[]'
-    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-latest' }}
+    runs-on: ${{ github.event.repository.private && 'hetzner' || 'ubuntu-26.04' }}
     timeout-minutes: 20
 
     strategy:
