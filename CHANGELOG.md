@@ -14,10 +14,32 @@ The Neos 9 line's tags, `3.0.0` and above, are not part of the history below.
 
 ## [Unreleased]
 
+### Added
+
+- `indexing.allowReembedding` (default `false`) and `--allow-reembedding` on
+  `nodeindex:createindex` and `nodeindex:build`, to apply such embedder changes on
+  purpose.
+
 ### Changed
 
 - Requires PHP 8.1. PHP 8.0 has been end of life since November 2023, and CI no
   longer tests it.
+
+### Fixed
+
+- **Applying settings no longer re-embeds a whole index as a side effect.**
+  Meilisearch regenerates the embedding of every document when an embedder changes in
+  any field but its `apiKey`, and `createIndex()` - run by `nodeindex:createindex`,
+  `nodeindex:build` and every package that reuses `MeilisearchIndex` - pushed the
+  configured settings unchecked. A `documentTemplate` changed in the configuration
+  months earlier, but never applied, was enough: rotating an API key on a
+  386,000-document index started a full re-embedding, which ran into the embedding
+  provider's rate limit after nine minutes, failed and was rolled back after the tokens
+  were spent. On an index that already has documents, `createIndex()` and
+  `updateCustomSettings()` now hold back embedder changes that would re-embed it -
+  including adding an embedder - and still apply a new `apiKey`, which Meilisearch
+  takes without re-embedding. `nodeindex:createindex` and `nodeindex:build` report
+  every change they held back.
 
 ## [2.13.0] - 2026-09-19
 
