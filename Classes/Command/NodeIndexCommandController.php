@@ -15,6 +15,7 @@ use Neos\ContentRepository\Core\Projection\ContentGraph\NodeAggregate;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
+use Neos\ContentRepositoryRegistry\SubgraphCachingInMemory\SubgraphCachePool;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Annotations\Inject;
 use Neos\Flow\Cli\CommandController;
@@ -61,6 +62,9 @@ class NodeIndexCommandController extends CommandController
     protected PersistenceManagerInterface $persistenceManager;
     #[Inject]
     protected ContentRepositoryRegistry $contentRepositoryRegistry;
+
+    #[Inject]
+    protected SubgraphCachePool $subgraphCachePool;
 
 
     #[Inject]
@@ -283,6 +287,10 @@ class NodeIndexCommandController extends CommandController
             $sinceRelease = 0;
             $this->nodeIndexer->flush($targetIndexName);
             $this->persistenceManager->clearState();
+            // Every node the indexer read through subgraphForNode() - ancestors,
+            // parents, content - stays in the content repository's subgraph cache for
+            // the life of the process otherwise.
+            $this->subgraphCachePool->reset(false);
             gc_collect_cycles();
         };
     }

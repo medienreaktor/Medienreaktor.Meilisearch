@@ -20,7 +20,7 @@ use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\NodeType\NodeType;
 use Neos\ContentRepository\Core\NodeType\NodeTypeNames;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\CountDescendantNodesFilter;
-use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindDescendantNodesFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\NodeType\NodeTypeCriteria;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
@@ -126,6 +126,27 @@ final class WorkspaceIndexer
      * well would only bloat the generated IN (...) — normally this comes down to
      * the single abstract Neos.Neos:Document.
      */
+    /**
+     * Whether a node type is a fulltext root, by its configuration and with the
+     * answer kept per type: the walk asks for every node of the site.
+     *
+     * @return \Closure(string): bool
+     */
+    private function fulltextRootMatcher(ContentRepository $contentRepository): \Closure
+    {
+        $nodeTypeManager = $contentRepository->getNodeTypeManager();
+        $answers = [];
+
+        return static function (string $nodeTypeName) use ($nodeTypeManager, &$answers): bool {
+            if (!isset($answers[$nodeTypeName])) {
+                $search = $nodeTypeManager->getNodeType($nodeTypeName)?->getConfiguration('search');
+                $answers[$nodeTypeName] = is_array($search) && ($search['fulltext']['isRoot'] ?? false) === true;
+            }
+
+            return $answers[$nodeTypeName];
+        };
+    }
+
     public function fulltextRootNodeTypeCriteria(ContentRepository $contentRepository): NodeTypeCriteria
     {
         $cacheKey = $contentRepository->id->value;
@@ -218,24 +239,39 @@ final class WorkspaceIndexer
             $singleCallback($workspaceName, $indexedNodes, $dimensionSpacePoint);
         }
 
-        $descendantNodes = $subgraph->findDescendantNodes(
-            $rootNode->aggregateId,
-            FindDescendantNodesFilter::create(nodeTypes: $this->fulltextRootNodeTypeCriteria($contentRepository))
-        );
-        foreach ($descendantNodes as $descendantNode) {
-            // $indexedNodes already counts the sites root, so this caps the visited
-            // nodes at exactly $limit per dimension — which is what the progress
-            // bar's maximum is calculated from.
-            if ($limit !== null && $indexedNodes >= $limit) {
-                break;
-            }
+        // The tree is walked one parent's children at a time, and each fulltext root is
+        // indexed as it is found. Asking for all descendants at once loaded every
+        // document of the site with all its properties before indexing the first, which
+        // for a catalogue of 10,000 products outgrew 8G. Depth first, so that the
+        // pending parents stay few.
+        $isFulltextRoot = $this->fulltextRootMatcher($contentRepository);
+        $pending = [$rootNode->aggregateId];
+        while ($pending !== []) {
+            $parentId = array_pop($pending);
+            $childIds = [];
+            foreach ($subgraph->findChildNodes($parentId, FindChildNodesFilter::create()) as $childNode) {
+                $childIds[] = $childNode->aggregateId;
+                if (!$isFulltextRoot($childNode->nodeTypeName->value)) {
+                    continue;
+                }
+                // $indexedNodes already counts the sites root, so this caps the visited
+                // nodes at exactly $limit per dimension — which is what the progress
+                // bar's maximum is calculated from.
+                if ($limit !== null && $indexedNodes >= $limit) {
+                    break 2;
+                }
 
-            $this->nodeIndexer->indexSingleNode($descendantNode, $skipRemoval, $targetIndexName);
-            $indexedNodes++;
-            if ($singleCallback !== null) {
-                $singleCallback($workspaceName, $indexedNodes, $dimensionSpacePoint);
+                $this->nodeIndexer->indexSingleNode($childNode, $skipRemoval, $targetIndexName);
+                $indexedNodes++;
+                if ($singleCallback !== null) {
+                    $singleCallback($workspaceName, $indexedNodes, $dimensionSpacePoint);
+                }
             }
-        };
+            // Reversed, so that the first child is the next to be walked.
+            foreach (array_reverse($childIds) as $childId) {
+                $pending[] = $childId;
+            }
+        }
 
         $this->nodeIndexer->flush($targetIndexName);
 

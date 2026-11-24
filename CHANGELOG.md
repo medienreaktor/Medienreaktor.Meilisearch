@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `nodeindex:build` and `nodeindex:rebuild` walk the tree one parent's children at a
+  time and index each document as they find it. They asked for every document of the
+  site at once, with all its properties, before indexing the first; for a catalogue of
+  10,000 products that took more than 8G, where it now stays under 500M. As on the
+  Neos 8 line (2.12.0).
+- The build releases the content repository's subgraph cache with every write batch,
+  as it does Doctrine's identity map. Every node it read through a subgraph stayed
+  cached for the rest of the run.
+
 ## [3.2.1] - 2026-11-24
 
 ### Fixed
