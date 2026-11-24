@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Medienreaktor\Meilisearch\Domain\Service;
 
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindAncestorNodesFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindPrecedingSiblingNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
@@ -42,6 +43,18 @@ class IndexPathService
         }
 
         return self::pathFromAggregateIds(array_reverse($aggregateIds));
+    }
+
+    /**
+     * The node's position among its siblings, from 0, as indexed in `__sortIndex`.
+     * Neos 9 nodes carry no sorting index of their own; the position orders them the
+     * same way.
+     */
+    public function positionOf(Node $node): int
+    {
+        return $this->contentRepositoryRegistry->subgraphForNode($node)
+            ->findPrecedingSiblingNodes($node->aggregateId, FindPrecedingSiblingNodesFilter::create())
+            ->count();
     }
 
     /**

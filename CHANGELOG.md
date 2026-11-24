@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `__sortIndex` holds the node's position among its siblings. It read `node.index`,
+  which Neos 9 nodes do not have, and was null on every document. Reindex to fill it.
 - `nodeindex:catchup` builds its documents through `NodeIndexer::extractNodeVariant()`,
   as `nodeindex:build` and real-time indexing do, so an override or aspect that
   leaves nodes out of the index (returning null there) applies to it too. It wrote

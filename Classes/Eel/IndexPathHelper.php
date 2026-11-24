@@ -43,6 +43,14 @@ class IndexPathHelper implements ProtectedContextAwareInterface
     }
 
     /**
+     * The node's position among its siblings, from 0
+     */
+    public function position(Node $node): int
+    {
+        return $this->indexPathService->positionOf($node);
+    }
+
+    /**
      * @param string $methodName
      * @return bool
      */

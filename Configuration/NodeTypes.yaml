@@ -35,7 +35,7 @@
         indexing: '${Array.pop(Indexing.buildAllPathPrefixes(Indexing.aggregateIdPath(node)))}'
     __sortIndex:
       search:
-        indexing: '${node.index}'
+        indexing: '${IndexPath.position(node)}'
 'Neos.Neos:Hidable':
   properties:
     _hidden:
