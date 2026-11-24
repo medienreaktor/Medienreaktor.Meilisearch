@@ -221,12 +221,17 @@ Properties of Content NodeTypes that should be included in fulltext search must 
         fulltextExtractor: "${Indexing.extractHtmlTags(node.properties.title)}"
 ```
 
-You will see that some properties are indexed twice, like `_path` and `__path`, `_nodeType` and `__nodeType`. This is due to the different _privacy_ of these node properties:
+You will see that some properties are indexed twice, like `_nodeType` and `__nodeType`. This is due to the different _privacy_ of these node properties:
 
 * `_*`-properties are default Neos node properties that are private to Neos (and may change)
 * `__*`-properties are private properties that are required for the Meilisearch-integration
 
 We have to make sure that our required properties are always there, so we better index them separately.
+
+`_hiddenBeforeDateTime` and `_hiddenAfterDateTime` stay filterable for indexes set up
+with them, but Neos 9 has no such node properties, and they are always empty. Timed
+visibility comes from `neos/timeable-node-visibility`: its cron command hides and shows
+the nodes, and a hidden node leaves the index (with `nodeindex:catchup`, on its next run).
 
 ### Disable fulltext extractor
 
