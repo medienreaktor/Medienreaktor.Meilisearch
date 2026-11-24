@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `nodeindex:catchup` notices a database that was replaced since its last run - a
+  restored backup, a mirror - instead of reading on from a sequence number that now
+  names other events or none, which skipped events silently. It resets to the current
+  event and asks for a `nodeindex:rebuild`. The stored position names its event by id
+  for that; positions stored by 3.2.0 are checked by sequence number alone.
+- The catch-up position is kept per index rather than per content repository, as it
+  describes what an index has seen. A position stored by 3.2.0 is taken over by the
+  index that runs first.
+- `nodeindex:build` and `nodeindex:rebuild` record the event they started at, so the
+  next `nodeindex:catchup` picks up what was published while they ran. A rebuild's swap
+  used to lose those changes until the next rebuild.
+
 ## [3.2.0] - 2026-11-24
 
 A project that configures and calls the package needs no changes. Code that implements

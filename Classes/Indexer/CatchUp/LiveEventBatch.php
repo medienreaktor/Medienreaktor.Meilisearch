@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Medienreaktor\Meilisearch\Indexer\CatchUp;
 
-use Neos\EventStore\Model\Event\SequenceNumber;
-
 final readonly class LiveEventBatch
 {
     /**
@@ -13,7 +11,7 @@ final readonly class LiveEventBatch
      */
     public function __construct(
         public array $impacts,
-        public SequenceNumber $lastSequenceNumber,
+        public CatchUpPosition $last,
         public int $eventCount,
     ) {
     }

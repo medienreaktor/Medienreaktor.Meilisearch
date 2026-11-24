@@ -84,6 +84,10 @@ class NodeIndexCommandController extends CommandController
         match ($result->outcome) {
             IndexCatchUpOutcome::AlreadyRunning => $this->outputLine('Another catch-up is running, nothing done.'),
             IndexCatchUpOutcome::Initialized => $this->outputLine('No position stored yet. Starting after event %d; nothing indexed.', [$result->to?->value]),
+            IndexCatchUpOutcome::Reset => $this->outputLine(
+                '<error>The event store no longer holds event %d the index was caught up to; it was replaced (a restored backup or a mirror). Starting after event %d; nothing indexed. Run nodeindex:rebuild to bring the index in line.</error>',
+                [$result->from?->value, $result->to?->value]
+            ),
             IndexCatchUpOutcome::CaughtUp => $this->outputLine(
                 'Events %d to %d: %d read, %d document(s) reindexed or removed.%s',
                 [$result->from?->value, $result->to?->value, $result->eventCount, $result->documentCount, $result->moreEventsPending ? ' More events pending.' : '']
@@ -146,6 +150,8 @@ class NodeIndexCommandController extends CommandController
         $contentRepository = $this->contentRepositoryRegistry->get($contentRepositoryId);
         $workspace = $contentRepository->findWorkspaceByName(WorkspaceName::forLive());
 
+        // Taken before indexing, so that what changes while this runs is caught up later.
+        $startPosition = $this->indexCatchUpService->head($contentRepositoryId);
         $this->output->progressStart($this->progressMax($contentRepositoryId, $workspace->workspaceName, $limit));
         $this->indexedNodes = $this->workspaceIndexer->index(
             $contentRepositoryId,
@@ -155,6 +161,9 @@ class NodeIndexCommandController extends CommandController
         );
         $this->nodeIndexer->flush();
         $this->output->progressFinish();
+        if ($limit === null) {
+            $this->indexCatchUpService->recordPosition($contentRepositoryId, $startPosition);
+        }
 
         $this->outputLine('Finished indexing ' . $this->indexedNodes . ' nodes in ' . round(microtime(true) - $startTime, 1) . 's.');
 
@@ -188,6 +197,8 @@ class NodeIndexCommandController extends CommandController
         $workspace = $contentRepository->findWorkspaceByName(WorkspaceName::forLive());
 
         $buildIndexName = $this->indexClient->createBuildIndex();
+        // Taken before indexing, so that what changes while this runs is caught up later.
+        $startPosition = $this->indexCatchUpService->head($contentRepositoryId);
         $this->output->progressStart($this->progressMax($contentRepositoryId, $workspace->workspaceName, $limit));
         try {
             $this->indexedNodes = $this->workspaceIndexer->index(
@@ -214,6 +225,7 @@ class NodeIndexCommandController extends CommandController
                 $this->outputLine('Carried over %d "%s" documents from the live index.', [$preserved, $label]);
             }
             $this->indexClient->swapBuildIndex($buildIndexName);
+            $this->indexCatchUpService->recordPosition($contentRepositoryId, $startPosition);
         } catch (\Throwable $e) {
             $this->nodeIndexer->discardBuffer();
             $this->indexClient->deleteBuildIndex($buildIndexName);

@@ -126,15 +126,20 @@ the index current from cron instead:
 handled last and replaces the documents they touch in the live workspace. Hidden or
 removed pages behave as in `nodeindex:build`: removed ones leave the index, a tag,
 untag or move reaches every document below. The position is kept per content
-repository in the persistent cache `Medienreaktor_Meilisearch_CatchUpPosition`; it
-only moves on after a batch is indexed, so a failed run is retried by the next. The
-first run, or one after that cache was lost, only records the current position, as
-the next rebuild covers everything before. Runs lock against each other.
-`--batch-size` caps the events read per run (default 10000).
+repository and index in the persistent cache `Medienreaktor_Meilisearch_CatchUpPosition`;
+it only moves on after a batch is indexed, so a failed run is retried by the next.
+`nodeindex:build` and `nodeindex:rebuild` record the event they started at, so the next
+run picks up what was published while they ran. The first run without a position, or
+one after that cache was lost, only records the current position. Runs lock against
+each other. `--batch-size` caps the events read per run (default 10000).
 
-Two gaps are left to the nightly rebuild: a content node removed for good (not
-soft-removed by tag, as the Neos UI does) can no longer be traced to its document,
-and changes published while `nodeindex:rebuild` runs can be overwritten by its swap.
+A position names its event by id as well. When the database is replaced underneath it
+- a restored backup, a mirror from another system - the event store no longer holds
+that event, and the run says so, starts over from the current event and asks for a
+`nodeindex:rebuild`; reading on from the old number would skip or misread events.
+
+One gap is left to the nightly rebuild: a content node removed for good (not
+soft-removed by tag, as the Neos UI does) can no longer be traced to its document.
 
 ### Building in place
 
