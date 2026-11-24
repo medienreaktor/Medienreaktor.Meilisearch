@@ -1,6 +1,7 @@
 # Changelog
 
-All notable changes to this package are documented in this file.
+All notable changes to the Neos 8 line of this package, 2.x, are documented in this
+file. The Neos 9 line, 3.x, lives on `main` and keeps its own changelog there.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -9,8 +10,7 @@ Everything before the unreleased section was reconstructed from the Git history 
 the fact. It records what each release changed, not what its author would have written
 at the time, and the wording of older entries is inferred from commit messages.
 
-This repository also carries a Neos 9 line on the `neos9` branch. Its tags - `3.0.0`
-and above - are not part of the history below.
+The Neos 9 line's tags, `3.0.0` and above, are not part of the history below.
 
 ## [Unreleased]
 
