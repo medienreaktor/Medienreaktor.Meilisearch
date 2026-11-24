@@ -42,7 +42,7 @@
             "package-key": "Medienreaktor.Meilisearch"
         },
         "branch-alias": {
-            "dev-neos9": "3.x-dev"
+            "dev-main": "3.x-dev"
         }
     },
     "scripts": {

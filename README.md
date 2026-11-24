@@ -2,7 +2,7 @@
 
 [![Packagist Version](https://img.shields.io/packagist/v/medienreaktor/meilisearch)](https://packagist.org/packages/medienreaktor/meilisearch)
 [![PHP Version Support](https://img.shields.io/packagist/dependency-v/medienreaktor/meilisearch/php)](https://www.php.net/)
-[![CI](https://github.com/medienreaktor/Medienreaktor.Meilisearch/actions/workflows/ci.yml/badge.svg?branch=neos9)](https://github.com/medienreaktor/Medienreaktor.Meilisearch/actions/workflows/ci.yml)
+[![CI](https://github.com/medienreaktor/Medienreaktor.Meilisearch/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/medienreaktor/Medienreaktor.Meilisearch/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Integrates Meilisearch into Neos.
