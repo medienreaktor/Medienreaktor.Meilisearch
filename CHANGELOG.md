@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Applying settings no longer re-embeds a whole index as a side effect. Meilisearch
+  regenerates the embedding of every document when an embedder changes in any field
+  but its `apiKey`, and `createIndex()` - run by `nodeindex:createindex` and
+  `nodeindex:build` - and `updateCustomSettings()` sent the configured settings
+  unchecked. On an index that already has documents they now hold back embedder
+  changes that would re-embed it, adding an embedder included, and still apply a new
+  `apiKey`. If the index cannot be read, no settings are sent. The commands report
+  every change they held back. As on the Neos 8 line (2.14.0).
 - `indexing.maxFulltextBytes` limits fulltext to that many bytes. The text was cut to
   that many characters, so text with umlauts and other non-ASCII characters stayed up to
   four times over the limit.
@@ -68,6 +76,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `indexing.allowReembedding` (default `false`) and `--allow-reembedding` on
+  `nodeindex:createindex` and `nodeindex:build`, to apply embedder changes that
+  re-embed the index on purpose. As on the Neos 8 line (2.14.0).
 - The `Meilisearch` Eel helper for frontend tenant tokens
   (`Meilisearch.tenantToken()`, `searchRules()`, `frontendFilter()`) with the settings
   `client.readonlyApiKey`, `client.readonlyApiKeyUid` and `tenantToken.expiresIn`

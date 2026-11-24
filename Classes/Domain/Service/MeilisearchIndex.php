@@ -11,6 +11,7 @@ use Meilisearch\Contracts\DocumentsQuery;
 use Meilisearch\Contracts\IndexesQuery;
 use Meilisearch\Contracts\TasksQuery;
 use Meilisearch\Endpoints\Indexes;
+use Meilisearch\Exceptions\ApiException;
 use Meilisearch\Exceptions\TimeOutException;
 use Meilisearch\Search\SearchResult;
 use Neos\Flow\Annotations as Flow;
@@ -42,6 +43,14 @@ class MeilisearchIndex implements IndexInterface
      * long to send.
      */
     private const TASK_QUERY_CHUNK_SIZE = 500;
+
+    /**
+     * The embedder fields Meilisearch applies without regenerating any embedding.
+     * Only the apiKey is listed because it is the only one verified to behave that way
+     * (against Meilisearch 1.22): swapping it left every embedding of a 386,000-document
+     * index in place, while a changed documentTemplate started over from the first one.
+     */
+    private const EMBEDDER_FIELDS_APPLIED_WITHOUT_REEMBEDDING = ['apiKey'];
 
     /**
      * Uids of the tasks this instance enqueued and has not yet waited for.
@@ -82,6 +91,22 @@ class MeilisearchIndex implements IndexInterface
      * @var array
      */
     protected $indexingSettings;
+
+    /**
+     * Set for one run by `--allow-reembedding`, on top of the `indexing.allowReembedding`
+     * setting.
+     *
+     * @var bool
+     */
+    protected $reembeddingAllowedForThisRun = false;
+
+    /**
+     * What the last settings update held back, one line per embedder, for the command
+     * that triggered it to report.
+     *
+     * @var list<string>
+     */
+    protected $skippedEmbedderChanges = [];
 
     /**
      * @param string $indexName
@@ -276,11 +301,32 @@ class MeilisearchIndex implements IndexInterface
         }
     }
 
+    /**
+     * The settings are checked against the server before the index is created, so that
+     * an index which does not exist yet answers as one - with nothing embedded to lose.
+     */
     public function createIndex(): void
     {
+        $settings = $this->withoutReembeddingChanges(IndexSettings::fromConfiguration($this->indexSettings)->toArray());
         $this->client->createIndex($this->indexName);
-        $this->index->updateSettings(IndexSettings::fromConfiguration($this->indexSettings)->toArray());
+        $this->index->updateSettings($settings);
         $this->index->update(['primaryKey' => 'id']);
+    }
+
+    /**
+     * Let the next settings update apply embedder changes that re-embed the index.
+     */
+    public function allowReembedding(): void
+    {
+        $this->reembeddingAllowedForThisRun = true;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getSkippedEmbedderChanges(): array
+    {
+        return $this->skippedEmbedderChanges;
     }
 
     /**
@@ -517,7 +563,102 @@ class MeilisearchIndex implements IndexInterface
         }
 
         $this->indexSettings = $settings;
-        $this->awaitTask($this->index->updateSettings(IndexSettings::fromConfiguration($this->indexSettings)->toArray()));
+        $this->awaitTask($this->index->updateSettings(
+            $this->withoutReembeddingChanges(IndexSettings::fromConfiguration($this->indexSettings)->toArray())
+        ));
+    }
+
+    /**
+     * Meilisearch regenerates the embedding of every document in an index when one of
+     * its embedders changes in any field but the apiKey, and it does so inside the
+     * settings task. createIndex() is how deployments apply settings, so a
+     * documentTemplate edited in the configuration - or one that had drifted from what
+     * the server held - used to start a full re-embedding as a side effect. On a large
+     * index that runs into the embedding provider's rate limit, and the whole task
+     * fails and is rolled back after the tokens were spent.
+     *
+     * On an index that already has documents such changes are therefore held back and
+     * only the apiKey is passed on, so key rotation keeps working. A new embedder
+     * counts as such a change too: adding one embeds every document. Re-embedding has
+     * to be asked for through the `indexing.allowReembedding` setting or
+     * allowReembedding().
+     *
+     * @param array $settings
+     * @return array
+     */
+    protected function withoutReembeddingChanges(array $settings): array
+    {
+        $this->skippedEmbedderChanges = [];
+
+        if (empty($settings['embedders']) || $this->reembeddingAllowed()) {
+            return $settings;
+        }
+
+        try {
+            $documentCount = (int) ($this->index->stats()['numberOfDocuments'] ?? 0);
+            // Read through getSettings() rather than getEmbedders(), which the older
+            // meilisearch-php releases this package still allows do not have. Newer
+            // ones wrap the embedders in an Embedders object, which an array cast
+            // would turn into its properties rather than its entries.
+            $embedders = $this->index->getSettings()['embedders'] ?? [];
+            $liveEmbedders = $embedders instanceof \Traversable ? iterator_to_array($embedders) : (array) $embedders;
+        } catch (ApiException $exception) {
+            if ($exception->errorCode !== 'index_not_found') {
+                // Whether the index holds documents is unknown, so nothing that might
+                // re-embed them is sent.
+                throw $exception;
+            }
+            // The index does not exist yet, so nothing has been embedded that a
+            // settings update could throw away.
+            return $settings;
+        }
+
+        if ($documentCount === 0) {
+            return $settings;
+        }
+
+        foreach ($settings['embedders'] as $name => $embedder) {
+            $embedder = (array) $embedder;
+            $live = isset($liveEmbedders[$name]) ? (array) $liveEmbedders[$name] : null;
+
+            $changedFields = [];
+            foreach ($embedder as $field => $value) {
+                if (in_array($field, self::EMBEDDER_FIELDS_APPLIED_WITHOUT_REEMBEDDING, true)) {
+                    continue;
+                }
+                if ($live === null || !array_key_exists($field, $live) || $live[$field] != $value) {
+                    $changedFields[] = $field;
+                }
+            }
+
+            if ($changedFields === []) {
+                continue;
+            }
+
+            $this->skippedEmbedderChanges[] = $live === null
+                ? sprintf('Embedder "%s" of index "%s" is not on the server yet; adding it would embed every document.', $name, $this->indexName)
+                : sprintf('Embedder "%s" of index "%s": %s differ from the server; applying them would re-embed every document.', $name, $this->indexName, implode(', ', $changedFields));
+
+            $applicable = $live === null
+                ? []
+                : array_intersect_key($embedder, array_flip(self::EMBEDDER_FIELDS_APPLIED_WITHOUT_REEMBEDDING));
+            if ($applicable === []) {
+                unset($settings['embedders'][$name]);
+            } else {
+                $settings['embedders'][$name] = $applicable;
+            }
+        }
+
+        if ($settings['embedders'] === []) {
+            unset($settings['embedders']);
+        }
+
+        return $settings;
+    }
+
+    protected function reembeddingAllowed(): bool
+    {
+        return $this->reembeddingAllowedForThisRun || (bool) ($this->indexingSettings['allowReembedding'] ?? false);
     }
 
     /**
