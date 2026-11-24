@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.1] - 2026-11-24
+
 ### Fixed
 
 - `nodeindex:catchup` notices a database that was replaced since its last run - a
@@ -236,7 +238,8 @@ are filled correctly, and thumbnail URIs are stable.
 - `search.fulltext.excludeChildren` on a node type skips its subtree when building
   the fulltext (released as the untracked tag 2.9.0).
 
-[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.2.0...HEAD
+[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.2.1...HEAD
+[3.2.1]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.2.0...3.2.1
 [3.2.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.1.0...3.2.0
 [3.1.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.3...3.1.0
 [3.0.3]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/3.0.2...3.0.3
