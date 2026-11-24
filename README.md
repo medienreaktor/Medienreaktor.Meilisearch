@@ -288,7 +288,9 @@ The search query builder supports the following features:
 | `query(context)`                             | Sets the starting point for this query, e.g. `query(site)` |
 | `nodeType(nodeTypeName)`                     | Filters by the given NodeType, e.g. `nodeType('Neos.Neos:Document')` |
 | `fulltext(searchTerm)`                       | Performs a fulltext search |
-| `vector(vector)`                             | Performs a vector search (see below) |
+| `hybrid(searchTerm, options)`                | Combines keyword and vector search through an embedder (see below) |
+| `vector(searchTerm, options)`                | Performs a vector search through an embedder (see below); `vector(array)` searches a precomputed vector |
+| `distinct(attribute)`                        | Returns one hit per value of the attribute |
 | `filter(filterString)`                       | Filters by given filter string, e.g. `filter('__nodeTypeAndSupertypes = "Neos.Neos:Document"')` (see [Meilisearch Documentation](https://www.meilisearch.com/docs/reference/api/search#filter))  |
 | `exactMatch(propertyName, value)`            | Filters by a node property |
 | `exactMatchMultiple(properties)`             | Filters by multiple node properties, e.g. `exactMatchMultiple(['author' => 'foo', 'date' => 'bar'])` |
@@ -486,6 +488,16 @@ Medienreaktor:
 ```
 
 The `documentTemplate` should ideally generate a Markdown excerpt of your page to create meaningful vectors.
+
+### Changing an embedder
+
+Meilisearch embeds every document again when an embedder changes in anything but its
+`apiKey`, and adding an embedder embeds every document too. On an index that already
+has documents, `nodeindex:createindex` and `nodeindex:build` therefore apply only a new
+`apiKey` and report every other embedder change as held back. To apply such a change on
+purpose, pass `--allow-reembedding` or set `Medienreaktor.Meilisearch.indexing.allowReembedding: true`.
+
+`nodeindex:rebuild` builds a new index, so it embeds every document on every run.
 
 ### Using Embedders and semanticRatio in Fusion
 
