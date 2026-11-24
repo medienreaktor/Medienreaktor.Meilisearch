@@ -14,6 +14,8 @@ The Neos 9 line's tags, `3.0.0` and above, are not part of the history below.
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-11-24
+
 ### Added
 
 - `indexing.allowReembedding` (default `false`) and `--allow-reembedding` on
@@ -408,7 +410,10 @@ The Neos 9 line's tags, `3.0.0` and above, are not part of the history below.
 - Initial release: Meilisearch integration for Neos, with node indexing and a query
   builder.
 
-[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.11.0...HEAD
+[Unreleased]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.14.0...HEAD
+[2.14.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.13.0...2.14.0
+[2.13.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.12.0...2.13.0
+[2.12.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.11.0...2.12.0
 [2.11.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.10.0...2.11.0
 [2.10.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.6.0...2.10.0
 [2.6.0]: https://github.com/medienreaktor/Medienreaktor.Meilisearch/compare/2.5.0...2.6.0
