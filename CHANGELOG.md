@@ -14,6 +14,17 @@ The Neos 9 line's tags, `3.0.0` and above, are not part of the history below.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`nodeindex:build --wait` no longer fails with a `TypeError` when it indexed nothing.**
+  The indexer's client is configured through `IndexFactory` in `Objects.yaml`, and Flow
+  injects such a property as a lazy `DependencyProxy` regardless of the `Inject`
+  annotation. The proxy turns into the client on its first method call, which `flush()`
+  makes only when it has something to write, so after a run of zero nodes
+  `getIndexClient()` returned the proxy and violated its `IndexInterface` return type.
+  The client is now injected through `injectIndexClient()`, which Flow calls eagerly.
+  Flush Flow caches after updating so the proxies are rebuilt.
+
 ## [2.14.0] - 2026-11-24
 
 ### Added
