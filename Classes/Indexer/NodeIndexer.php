@@ -35,7 +35,6 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
     private const DEFAULT_BATCH_SIZE = 1000;
 
     /**
-     * @Flow\Inject
      * @var IndexInterface
      */
     protected $indexClient;
@@ -126,6 +125,16 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
     {
         parent::initializeObject($cause);
         putenv('FLOW_REWRITEURLS=1');
+    }
+
+    /**
+     * Objects.yaml builds this client through IndexFactory, and Flow injects such a
+     * property lazily whatever its Inject annotation says. Only an inject method makes
+     * the injection eager, so getIndexClient() cannot return the DependencyProxy.
+     */
+    public function injectIndexClient(IndexInterface $indexClient): void
+    {
+        $this->indexClient = $indexClient;
     }
 
     /**
